@@ -1,0 +1,29 @@
+# Preset cho một streamer. Sao chép thành config/<ten_streamer>.yaml rồi sửa.
+
+ten: "Streamer Mẫu"
+nen_tang: youtube            # youtube | twitch
+game_chinh: ["Valorant", "PUBG"]
+phong_cach: "tấu hề, hay cay cú, chửi đồng đội vui vẻ; khán giả thích pha fail hơn pha xử lý hay"
+
+# Vị trí facecam trên khung 1920x1080 — đo một lần bằng cách mở một khung hình của VOD.
+# Toạ độ được tự quy đổi nếu VOD có độ phân giải khác.
+facecam: {x: 1440, y: 810, w: 480, h: 270}
+
+# Định dạng dọc 1080x1920 (Shorts/TikTok)
+doc:
+  kieu: cam_tren           # cam_tren (facecam trên, gameplay dưới) | khong_cam (nền mờ)
+  gameplay_center_x: 960   # tâm vùng gameplay theo chiều ngang, trên khung 1920x1080
+  ti_le_cam: 0.32          # facecam chiếm 32% chiều cao khung dọc
+
+# Câu cửa miệng của streamer — xuất hiện trong lời nói thường báo hiệu khoảnh khắc hay
+tu_khoa_hype: ["ối", "sao lại thế", "gánh", "cứu"]
+
+# Nội dung KHÔNG được đưa vào clip
+khong_duoc_dung:
+  - "đoạn đọc donate hoặc cảm ơn donate"
+  - "đoạn nói về chuyện gia đình, đời tư"
+  - "đoạn chờ trận, ở sảnh, AFK"
+
+# Dùng từ tuần 3 (chèn meme)
+mat_do_meme_sec: 8
+meme_cam: ["nsfw", "chính trị", "phân biệt vùng miền"]

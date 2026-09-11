@@ -1,0 +1,5 @@
+# Nhận dạng giọng nói — nặng, cần GPU NVIDIA để chạy nhanh.
+# Cài PyTorch bản CUDA trước theo hướng dẫn tại https://pytorch.org
+# Chọn MỘT trong hai backend (khai báo trong config/settings.yaml):
+whisperx>=3.1        # timestamp theo từ chính xác hơn (khuyên dùng)
+faster-whisper>=1.0  # dễ cài hơn, đặc biệt trên Windows

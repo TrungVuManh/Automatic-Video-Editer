@@ -1,0 +1,72 @@
+# Cấu hình chung cho mọi streamer.
+
+models:
+  select: claude-sonnet-5              # bước 4: chọn & cắt clip (cần suy luận tốt)
+  cheap: claude-haiku-4-5              # việc nhẹ: gắn nhãn meme, metadata, sửa phụ đề
+
+asr:
+  backend: whisperx        # whisperx | faster-whisper
+  model: large-v3
+  language: vi
+  # WhisperX không có model căn chỉnh theo từ cho mọi ngôn ngữ. Nếu log báo "Căn chỉnh theo
+  # từ thất bại", điền tên một model wav2vec2 tiếng Việt trên Hugging Face vào đây, ví dụ
+  # nguyenvulebinh/wav2vec2-base-vietnamese-250h — hoặc đổi backend sang faster-whisper.
+  align_model:             # để trống = dùng mặc định của WhisperX
+  device: cuda             # cuda | cpu
+  compute_type: float16    # float16 cho GPU, int8 cho CPU
+  batch_size: 16
+
+candidates:
+  window_sec: 10           # độ dài cửa sổ chấm điểm
+  baseline_sec: 300        # cửa sổ tính mức nền (lượng người xem thay đổi trong buổi stream)
+  top_k: 30                # số ứng viên tối đa gửi cho Claude
+  min_gap_sec: 60          # khoảng cách tối thiểu giữa hai đỉnh
+  min_score: 0.2           # bỏ các đỉnh chỉ là nhiễu
+  pre_sec: 60              # lùi lại trước đỉnh để lấy bối cảnh
+  post_sec: 30             # tiến tới sau đỉnh để lấy phản ứng
+  refs:                    # mức tín hiệu được tính là điểm 1.0
+    loud_db: 12            # to hơn mức nền 12 dB
+    chat_ratio: 4          # chat gấp 4 lần mức nền
+    keywords: 1
+  weights:
+    chat: 0.5
+    loudness: 0.3
+    keywords: 0.2
+  # Từ khóa "hype" phổ biến trong chat (so khớp không phân biệt hoa thường)
+  chat_hype_tokens: ["kkk", "=))", ":))", "gg", "vcl", "vl", "lol", "lmao", "clutch", "ghê", "đỉnh", "?????"]
+
+clips:
+  min_sec: 15
+  max_sec: 90
+  max_clips: 10
+
+render:
+  crf: 20
+  preset: veryfast
+  preview_height: 480
+  dinh_dang: ca-hai        # ngang | doc | ca-hai — mặc định khi không truyền --format
+  phu_de: true             # burn phụ đề karaoke vào clip
+
+# Kiểu phụ đề .ass. Màu viết theo &HAABBGGRR (BGR, không phải RGB).
+# mau_chinh = chữ đã được nói tới; mau_phu = chữ chưa tới.
+phu_de:
+  font: "Arial"            # đổi sang font có dấu tiếng Việt đầy đủ, ví dụ "Be Vietnam Pro";
+                           # nếu là file riêng thì đặt trong assets/fonts/
+  mau_chinh: "&H0000FFFF"  # vàng
+  mau_phu: "&H00FFFFFF"    # trắng
+  mau_vien: "&H00000000"   # đen
+  max_tu: 5                # số từ tối đa một dòng
+  max_ky_tu: 28
+  ngat_khi_lang: 0.6       # lặng quá ngần này (giây) thì sang dòng mới
+  doc:
+    co_chu: 80
+    vien: 5
+    canh: 8                # 8 = giữa-trên (phụ đề nằm ngay dưới facecam)
+    le_ngang: 60
+    le_doc: 40             # cộng thêm vào chiều cao facecam
+  ngang:
+    co_chu: 52
+    vien: 4
+    canh: 2                # 2 = giữa-dưới
+    le_ngang: 80
+    le_doc: 70

@@ -1,0 +1,33 @@
+# Bí mật
+.env
+
+# Dữ liệu từng VOD (rất nặng) — chỉ giữ thư mục rỗng
+jobs/*
+!jobs/.gitkeep
+
+# Font tự tải về (giấy phép riêng) — chỉ commit README hướng dẫn
+assets/fonts/*
+!assets/fonts/README.md
+
+# File media trong thư viện meme (có thể dính bản quyền) — chỉ commit library.jsonl
+meme_library/**/*.mp4
+meme_library/**/*.mov
+meme_library/**/*.webm
+meme_library/**/*.mp3
+meme_library/**/*.wav
+meme_library/**/*.png
+meme_library/**/*.jpg
+meme_library/**/*.gif
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

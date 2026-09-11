@@ -1,0 +1,3 @@
+{"id": "vine_boom", "file": "sfx/vine_boom.mp3", "type": "sfx", "dung_khi": "câu nói ngớ ngẩn, khoảnh khắc sốc, im lặng khó xử", "dai": 1.0, "nguon": "ĐIỀN NGUỒN/GIẤY PHÉP"}
+{"id": "zoom_mat", "file": null, "type": "effect", "dung_khi": "phản ứng sốc hoặc cay cú của streamer, phóng to vào facecam", "dai": 1.2, "nguon": "tự tạo"}
+{"id": "rung_man_hinh", "file": null, "type": "effect", "dung_khi": "nổ, bị hạ bất ngờ, streamer đập bàn", "dai": 0.6, "nguon": "tự tạo"}
