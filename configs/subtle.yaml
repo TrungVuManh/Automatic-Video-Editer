@@ -1,0 +1,9 @@
+# Ít meme, chỉ chèn khi rất chắc chắn (SPEC §50).
+editing:
+  max_memes_per_minute: 2
+  cooldown: 12
+  threshold: 0.8
+
+meme:
+  duration_min: 0.8
+  duration_max: 1.5

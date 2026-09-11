@@ -1,32 +1,42 @@
 # Hướng dẫn cho Claude Code
 
-Dự án: pipeline Python tự động cắt highlight, làm video dọc có phụ đề và chèn meme cho
-video stream game tiếng Việt. Claude (API) ra quyết định dạng JSON; FFmpeg dựng video.
+Dự án **automeme**: công cụ Python tìm khoảnh khắc trong video tiếng Việt để chèn meme/reaction.
+faster-whisper (lời thoại) → LLM local qua Ollama (quyết định dạng JSON) → tìm và xếp hạng
+meme → `timeline.json` (người duyệt được) → FFmpeg render.
 
-**Đọc `docs/HANDOFF.md` ở đầu mỗi phiên** — trong đó có hiện trạng, đặc tả chi tiết từng
-tuần, checklist và nhật ký tiến độ. Cập nhật checklist + nhật ký sau mỗi việc hoàn thành.
+**Đọc `docs/HANDOFF.md` ở đầu mỗi phiên** — hiện trạng, quyết định đã chốt, lộ trình,
+checklist, nhật ký. Đặc tả gốc là `docs/SPEC.md`; khi mâu thuẫn thì HANDOFF đúng.
+Cập nhật checklist + nhật ký sau mỗi việc hoàn thành.
 
 ## Quy tắc bắt buộc
 - Lập kế hoạch và chờ người dùng đồng ý trước khi code một hạng mục mới.
-- Mọi output của model qua hàm `validate_*` trước khi dùng.
-- Logic là hàm thuần có test; phần gọi FFmpeg/API mỏng nhất có thể.
-- Import thư viện nặng (whisperx, faster_whisper, anthropic, torch) bên trong hàm.
-- Tham số đặt trong `config/`, prompt đặt trong `prompts/`, không hard-code.
-- Mỗi bước bỏ qua nếu output đã tồn tại.
+- Mọi output của LLM qua model pydantic + hàm `validate_*` trước khi dùng. Ràng buộc cứng
+  (cooldown, số meme/phút, thời lượng, chồng lấn, file tồn tại) do code quyết định, không phải LLM.
+- Logic là hàm thuần có test; phần gọi FFmpeg/Ollama/API mỏng nhất có thể. FFmpeg chỉ gọi qua
+  `automeme.media`, lệnh dạng list.
+- Import thư viện nặng (faster_whisper, ctranslate2, ollama, anthropic, torch) bên trong hàm.
+- Tham số dựng video đặt trong `configs/` (profile), tham số máy trong `.env`, prompt trong
+  `prompts/` — không hard-code.
+- Mỗi bước bỏ qua nếu output đã tồn tại; ghi ra file tạm rồi đổi tên.
 - Log và comment tiếng Việt; trả lời người dùng bằng tiếng Việt.
-- `pytest -q` phải xanh trước khi đề xuất commit; chỉ commit khi người dùng đồng ý.
-- Không commit `.env`, file media, `jobs/`. Hỏi trước khi cài thư viện mới.
+- `pytest -q` và `ruff check src tests` phải xanh trước khi đề xuất commit; chỉ commit khi
+  người dùng đồng ý.
+- Không commit `.env`, file media, `data/`. Hỏi trước khi cài thư viện mới.
+- `legacy/` là code cũ (cắt highlight stream) — không sửa trừ khi người dùng yêu cầu.
 
 ## Lệnh
-- Test: `pytest -q`
-- Chạy thử với video có sẵn: `python run.py all --job test --streamer streamer_example --platform twitch --video <file.mp4>`
-- Duyệt / render: `python run.py review --job X`, `python run.py render --job X [--preview]`
+Venv không được kích hoạt sẵn — gọi qua `.venv\Scripts\`:
+- Test: `.venv\Scripts\python -m pytest -q` · Lint: `.venv\Scripts\ruff check src tests`
+- Kiểm tra môi trường: `.venv\Scripts\automeme doctor`
+- Cài lại sau khi sửa `pyproject.toml`: `.venv\Scripts\python -m pip install -e ".[dev]"`
+- Mục tiêu MVP: `automeme run input.mp4 --profile funny` (chưa làm — xem lộ trình trong HANDOFF)
 
 ## Lệnh tắt (skill) trong dự án
 - `/tiep-tuc` — làm hạng mục tiếp theo trong lộ trình
-- `/chay-that` — hướng dẫn chạy pipeline trên VOD thật và kiểm tra từng bước
+- `/chay-that` — chạy pipeline trên một video thật và kiểm tra từng bước
 - `/sua-loi` — chẩn đoán và sửa lỗi từ log/triệu chứng
 
 ## Môi trường
-Người dùng có thể dùng Windows: chú ý đường dẫn trong filter FFmpeg (escape `:` và `\`),
-luôn `encoding="utf-8"` khi mở file, gợi ý `PYTHONUTF8=1`.
+Windows: đường dẫn trong filter FFmpeg phải escape `:` và `\` — né bằng cách đưa file vào qua
+`-i`, hoặc chạy FFmpeg với `cwd` là thư mục chứa file và dùng tên tương đối. Luôn
+`encoding="utf-8"` khi mở file, gợi ý `PYTHONUTF8=1`.

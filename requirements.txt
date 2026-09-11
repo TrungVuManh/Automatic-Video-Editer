@@ -1,7 +1,3 @@
-# Lõi pipeline (nhẹ, cài được mọi nơi)
-anthropic>=0.40
-pyyaml>=6.0
-numpy>=1.26
-soundfile>=0.12
-python-dotenv>=1.0
-yt-dlp>=2025.1.1
+# Nguồn chính của danh sách thư viện là pyproject.toml. File này chỉ để lệnh
+# `python -m pip install -r requirements.txt` (README §11) vẫn dùng được.
+-e .[dev]

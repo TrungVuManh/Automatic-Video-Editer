@@ -1,5 +1,8 @@
 # Auto Meme Video Editor
 
+> **Đặc tả gốc của dự án — giữ nguyên văn.** Những chỗ triển khai khác đi (và lý do) được
+> ghi ở `docs/HANDOFF.md`, mục "Quyết định đã chốt". Khi hai file mâu thuẫn, HANDOFF đúng.
+
 > AI tự động phân tích hội thoại trong video, xác định những khoảnh khắc phù hợp để chèn meme/reaction, tìm meme theo ngữ nghĩa và render chúng vào đúng timestamp.
 
 **Status:** Early Development / MVP  

@@ -8,6 +8,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: sudo apt-get update && sudo apt-get install -y libsndfile1
-      - run: pip install -r requirements-dev.txt
+      # FFmpeg để chạy cả test tách audio thật (không có thì test đó tự bỏ qua)
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check src tests
       - run: pytest -q

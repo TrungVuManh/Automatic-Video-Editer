@@ -1,381 +1,261 @@
-# HANDOFF — Tài liệu bàn giao dự án stream-auto-editor
+# HANDOFF — Tài liệu bàn giao dự án automeme
 
-> Tài liệu này dành cho **Claude Code** (và người phát triển) để làm tiếp dự án.
-> Đọc toàn bộ trước khi bắt đầu một phiên mới. Sau mỗi việc hoàn thành, cập nhật
-> **Checklist** và **Nhật ký tiến độ** ở cuối file.
-
----
-
-## 1. Mục tiêu dự án
-
-Tự động hóa việc edit video stream game cho streamer Việt Nam:
-
-1. Từ một VOD dài (1–6 giờ) → tìm và cắt các khoảnh khắc hay (highlight).
-2. Xuất hai định dạng: **ngang** (YouTube) và **dọc** (Shorts/TikTok), có phụ đề.
-3. **Tự động chèn meme** (âm thanh, ảnh, video phông xanh, hiệu ứng) đúng thời điểm.
-4. Sinh metadata: tiêu đề, mô tả, tags, chapter, thumbnail.
-5. Người chỉ **duyệt** (15–20 phút/VOD), không edit tay.
-
-**Nguyên tắc kiến trúc cốt lõi:** Claude (qua API) chỉ **ra quyết định** và trả JSON có cấu trúc
-(tool use). Mọi xử lý media do **FFmpeg** làm. Mọi output của model đều phải qua hàm
-`validate_*` trước khi dùng — model có thể bịa id, trả thời gian sai, vượt giới hạn.
+> Dành cho **Claude Code** (và người phát triển). Đọc toàn bộ ở đầu mỗi phiên. Sau mỗi việc
+> hoàn thành, cập nhật **Checklist** (mục 6) và **Nhật ký tiến độ** (mục 8).
+> Đặc tả gốc: [`SPEC.md`](SPEC.md). Khi hai file mâu thuẫn, file này đúng (xem mục 4).
 
 ---
 
-## 2. Hiện trạng (đã xong tuần 1, phần code của 1.5, và tuần 2)
+## 1. Mục tiêu
 
-### Luồng dữ liệu
+Công cụ Python chạy trên Windows, local-first: nhận một video tiếng Việt, tìm khoảnh khắc nên
+chèn meme/reaction, tìm meme theo ngữ nghĩa, sinh `timeline.json` để người duyệt, rồi dùng
+FFmpeg render.
 
-```
-jobs/<job>/
-├── job.json                     # tên job, streamer, nền tảng, url
-├── raw/vod.mp4, audio.wav       # bước 1 (audio mono 16 kHz)
-├── raw/chat_raw.json            # bước 1 (định dạng gốc YouTube/Twitch)
-├── transcript/chat.json         # bước 2: [{t, user, text}]
-├── transcript/words.json        # bước 2: [{w, start, end}]  (giây từ đầu VOD)
-├── transcript/segments.json     # bước 2: [{start, end, text}]
-├── transcript/loudness.json     # bước 2: [dB mỗi giây]
-├── candidates/candidates.json   # bước 3: [{id:"k01", start, end, peaks:[...], score}]
-├── candidates/prompt_last.md    # bước 4: prompt thực tế đã gửi (để debug)
-├── clips.json                   # bước 4: [{id:"c01", candidate_id, start, end, loai, diem,
-│                                #           tieu_de, hook, ly_do, approved: null|true|false}]
-├── subs/c01_doc.ass             # bước 7: phụ đề karaoke, một file mỗi clip × định dạng
-├── preview/  final/             # bước 7: c01_ngang.mp4, c01_doc.mp4, highlight_<đd>.mp4
-├── usage.json                   # token vào/ra + ước tính USD từng lần gọi API
-└── pipeline.log                 # log mức DEBUG (kèm nguyên lệnh FFmpeg) — gửi khi báo lỗi
-```
+**MVP xong khi** (SPEC §61): với video tiếng Việt 30–90 giây, hệ thống tự transcribe, giữ
+timestamp, tìm khoảnh khắc, sinh query reaction, lấy meme ứng viên, chọn meme, chặn chèn quá
+dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất MP4 — không phải sửa code.
+
+**Ưu tiên** (SPEC §84): đúng lúc > nhiều tính năng; 3 meme rất đúng > 15 meme gần đúng.
+
+---
+
+## 2. Hiện trạng — Stage A xong
 
 ### Module
 
 | File | Vai trò | Ghi chú |
 |---|---|---|
-| `run.py` | CLI điều phối | `all`, `fetch`, `preprocess`, `candidates`, `select`, `review`, `render` |
-| `pipeline/common.py` | Đường dẫn, `Job`, I/O JSON, `run_cmd` | Mọi đường dẫn file của job đi qua `Job` |
-| `pipeline/s1_fetch.py` | Tải VOD + chat, tách audio | yt-dlp; Twitch chat qua TwitchDownloaderCLI |
-| `pipeline/s2_preprocess.py` | Parse chat, âm lượng, ASR | WhisperX hoặc faster-whisper; âm lượng đọc theo khối |
-| `pipeline/s3_candidates.py` | Chấm điểm cửa sổ 10s, chọn đỉnh | So với **mức nền cục bộ** (trung vị trượt 5 phút); mức tham chiếu cố định trong `settings.yaml → candidates.refs` |
-| `pipeline/s4_select.py` | Gọi Claude chọn clip | Tool `submit_clips`; `validate_clips`; `snap_to_words`; đưa phản hồi cũ vào prompt |
-| `pipeline/s4b_review.py` | Duyệt trên terminal | Ghi `feedback/examples.jsonl` (`kind: "clip"`) |
-| `pipeline/claude_api.py` | Lớp bao SDK Anthropic | `make_client` (retry 3 lần), `call_tool`, dịch lỗi sang tiếng Việt |
-| `pipeline/layout.py` | Filtergraph khung dọc 1080×1920 | Hàm thuần; quy đổi toạ độ preset theo độ phân giải nguồn; mọi cạnh chẵn |
-| `pipeline/subtitles.py` | Dựng file `.ass` karaoke | Hàm thuần: gom dòng → tag `\k` → nội dung file |
-| `pipeline/s7_render.py` | Render ngang/dọc + phụ đề + ghép | Encode lại để cắt chính xác; ghép bằng concat `-c copy` |
-| `pipeline/diagnostics.py` | `doctor` (môi trường), `inspect` (bảng điểm tín hiệu) | Phần dựng bảng là hàm thuần, có test |
+| `src/automeme/cli.py` | CLI Typer | `doctor` chạy được; `transcribe/analyze/inspect/render/run` là khung, thoát mã 1 và báo thuộc iteration nào. Callback nạp cấu hình mặc định để đặt mức log + bật file log |
+| `src/automeme/config.py` | Nạp cấu hình | `load_settings(profile, overrides, *, configs_dir, env, root)`; pydantic `extra="forbid"`; `ENV_MAP` ánh xạ tên biến SPEC §14 → khóa |
+| `src/automeme/doctor.py` | `automeme doctor` | Python, cấu hình, `.env`, ffmpeg/ffprobe + phiên bản, faster-whisper, GPU (nvidia-smi), Ollama (GET `/api/tags` + có model chưa) hoặc Claude, docker, git, UTF-8 |
+| `src/automeme/media/ffmpeg.py` | Chạy lệnh ngoài | `which` (tìm cả `Scripts/` của venv), `require_binary`, `run_cmd` (list args, log DEBUG nguyên lệnh), `CommandError` |
+| `src/automeme/media/probe.py` | ffprobe | `probe()` → `MediaInfo` (thời lượng, kích thước, fps, audio, sample rate, kênh, định dạng); `parse_probe` là hàm thuần, bỏ qua ảnh bìa |
+| `src/automeme/media/audio.py` | Tách audio | WAV PCM 16-bit mono 16 kHz; bỏ qua nếu đã có; ghi file `.part` rồi đổi tên |
+| `src/automeme/utils/files.py` | Đường dẫn, JSON | `PROJECT_ROOT`, `CONFIGS_DIR`, `PROMPTS_DIR`; `write_json` UTF-8, ghi file tạm rồi đổi tên |
+| `src/automeme/utils/timestamps.py` | Thời gian | `format_ts(13.2) → "00:13.20"`, `parse_ts` |
+| `src/automeme/utils/logger.py` | Log | `setup_logging(level)` (gọi lại được), `add_file_log` → `data/logs/automeme.log` (DEBUG, xoay vòng 5 MB × 3) |
+
+### Cấu hình
+
+`configs/default.yaml` (đủ mọi khóa) → `configs/<profile>.yaml` → biến môi trường/`.env` →
+cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ trong `config.ENV_MAP`. Biến rỗng
+= không ghi đè. Có test giữ `.env.example` và `ENV_MAP` luôn khớp nhau.
 
 ### Test
 
-`pytest -q` — **58 test**, chạy không cần GPU, API key, FFmpeg hay mạng (Claude được giả lập
-trong `tests/test_select_mock.py`). CI chạy trên GitHub Actions mỗi lần push.
+`pytest -q` — **73 test**, chạy không cần GPU, Ollama, API key hay mạng. Test tách audio thật
+(`test_tach_audio_that_tren_video_tu_sinh`) tự bỏ qua nếu không có FFmpeg; CI cài FFmpeg nên
+chạy cả nó. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q`.
 
-### Đã chạy thật
+### Máy người dùng (đo 2026-09-11)
 
-- **Render ngang + dọc + phụ đề karaoke trên Windows** (FFmpeg 9.0.1, Python 3.11 trong `.venv`):
-  video tự sinh bằng `lavfi`, kết quả đúng 1920×1080 và 1080×1920, chữ tiếng Việt đủ dấu, tô
-  chữ theo lời nói đúng thời điểm. Cách dựng lại nằm ở Nhật ký mục 2026-09-10 (phiên 2).
-
-### Những phần CHƯA được chạy thật (rủi ro cao nhất — xem mục 4)
-
-- WhisperX với tiếng Việt (đặc biệt model căn chỉnh theo từ) — **rủi ro số 1**: `words.json`
-  rỗng sẽ làm hỏng cả `snap_to_words` lẫn phụ đề karaoke. Code đã cảnh báo rõ khi gặp.
-- Lệnh gọi Claude API thật (mới test bằng giả lập).
-- yt-dlp tải live chat YouTube; TwitchDownloaderCLI.
-- Layout dọc trên VOD thật: toạ độ `facecam` trong preset mới là số ví dụ, chưa đo.
+- Windows 11. Python trên PATH là bản *embeddable* 3.13 (không có venv) → dự án dùng `.venv`
+  dựng từ Python 3.11.9. **Venv không được kích hoạt sẵn**: gọi qua `.venv\Scripts\...`.
+- FFmpeg 9.0.1 (winget), GPU RTX 4060 Laptop **8 GB VRAM**, Docker, gh, git.
+- **Chưa có:** Ollama, faster-whisper, file `.env`.
+- 8 GB VRAM đủ cho Whisper large-v3 *hoặc* qwen3:8b, không đủ nạp cả hai cùng lúc → phải giải
+  phóng Whisper trước khi gọi Ollama (Ollama giữ model trong VRAM ~5 phút sau lần gọi cuối).
 
 ---
 
-## 3. Quy tắc làm việc cho Claude Code
+## 3. Quy tắc làm việc
 
-1. **Lập kế hoạch trước khi code** mỗi hạng mục: liệt kê file sẽ tạo/sửa, hàm chính,
-   định dạng JSON mới, test sẽ viết. Chờ người dùng đồng ý rồi mới làm.
-2. **Hàm thuần tách khỏi I/O**: logic (dựng filtergraph, dựng file ASS, kiểm tra JSON)
-   phải là hàm thuần có test; phần gọi FFmpeg/API mỏng nhất có thể.
-3. **Import nặng bên trong hàm** (whisperx, faster_whisper, anthropic, torch) để test
-   chạy được trên CI.
-4. **Không đổi định dạng JSON đã có** mà không cập nhật: test, mục 2 của file này,
-   và mọi module đọc định dạng đó.
-5. **Tham số điều chỉnh được** đặt trong `config/settings.yaml` hoặc preset streamer,
-   không hard-code trong code.
-6. **Mỗi bước bỏ qua nếu output đã tồn tại** (chạy lại được từ giữa chừng). Giữ nguyên
-   quy ước này cho các bước mới.
-7. **Log và comment bằng tiếng Việt.** Tên hàm/biến bằng tiếng Anh; key JSON giữ theo
-   quy ước hiện có (một số key tiếng Việt không dấu như `tieu_de`, `ly_do`).
-8. `pytest -q` phải xanh trước khi đề xuất commit. Commit nhỏ, mỗi commit một ý.
-   Chỉ commit khi người dùng đồng ý.
-9. **Không bao giờ commit** `.env`, file media, thư mục `jobs/`.
-10. **Hỏi trước khi cài thư viện mới**, nhất là thư viện nặng. Ưu tiên FFmpeg + stdlib.
-11. Mọi prompt gửi Claude đặt trong `prompts/*.md`, không viết prompt dài trong code.
-12. Mọi lệnh gọi API ghi lại token vào `jobs/<job>/usage.json` (xem tuần 4) để theo dõi chi phí.
-
-### Những điều cần hỏi người dùng khi chưa rõ
-
-- Streamer stream trên YouTube hay Twitch? Layout overlay (vị trí facecam) thế nào?
-- Phong cách kênh, nội dung cấm (để điền preset).
-- Máy có GPU NVIDIA không? Hệ điều hành (Windows/Linux)?
+1. **Lập kế hoạch trước khi code** mỗi hạng mục: file tạo/sửa, hàm chính, định dạng JSON/config
+   mới, test sẽ viết. Chờ người dùng đồng ý.
+2. **Hàm thuần tách khỏi I/O**: dựng filtergraph, chuẩn hóa transcript, lọc cơ hội meme, xếp hạng
+   là hàm thuần có test; phần gọi FFmpeg/Ollama/API mỏng nhất có thể.
+3. **Import nặng bên trong hàm** (faster_whisper, ctranslate2, ollama, anthropic, torch).
+4. **Không tin LLM** (SPEC §24, §51, §53): output qua model pydantic + `validate_*`; JSON hỏng thì
+   thử lại 1 lần rồi bỏ ứng viên, không làm hỏng cả pipeline. Ràng buộc cứng (cooldown, số
+   meme/phút, giới hạn thời lượng, chồng lấn, file tồn tại, timestamp hợp lệ) do **code** quyết định.
+5. **Mọi component có interface** (SPEC §13): `Transcriber`, LLM, `MemeProvider`, renderer.
+6. **Không đổi định dạng JSON đã có** mà không cập nhật test, mục 2 file này và mọi chỗ đọc nó.
+   Khóa JSON theo tiếng Anh như SPEC.
+7. **Tham số** dựng video trong `configs/`, tham số máy trong `.env`, prompt trong `prompts/`.
+8. **Mỗi bước bỏ qua nếu output đã tồn tại**; ghi ra file tạm rồi đổi tên.
+9. **FFmpeg chỉ gọi qua `automeme.media`**, lệnh dạng list. File media đưa vào bằng `-i`, không
+   nhét đường dẫn vào chuỗi filter; filter nào buộc phải có tên file thì chạy với `cwd`.
+10. Log và comment tiếng Việt; tên hàm/biến tiếng Anh.
+11. `pytest -q` + `ruff check src tests` xanh trước khi đề xuất commit. Chỉ commit khi người dùng
+    đồng ý. Không commit `.env`, media, `data/`.
+12. **Hỏi trước khi cài thư viện mới.**
 
 ---
 
-## 4. Tuần 1.5 — Chạy thật lần đầu & gia cố (LÀM TRƯỚC TIÊN)
+## 4. Quyết định đã chốt
 
-Mục tiêu: pipeline tuần 1 chạy thành công trên **một VOD thật 30–60 phút** trên máy người dùng.
-Dùng lệnh `/chay-that` để được hướng dẫn từng bước.
+**2026-09-11 — chuyển dự án** (người dùng đồng ý cả 4 điểm):
 
-### Việc cần làm
+- Dự án theo `docs/SPEC.md`. Code cũ (cắt highlight stream game) chuyển nguyên vào
+  `legacy/stream_editor/` — vẫn chạy được (58 test xanh khi chạy trong thư mục đó), nhưng không
+  nằm trong CI và không bảo trì.
+- LLM: **Ollama mặc định** (`qwen3:8b`), **Claude là adapter tùy chọn** (`llm.backend: claude`)
+  — port từ `legacy/stream_editor/pipeline/claude_api.py` ở Iteration 3.
+- Snapshot git: commit `295a69f`.
 
-- [x] Kiểm tra môi trường — đã có lệnh `python run.py doctor` làm hết (ffmpeg, ffprobe,
-      ffplay, yt-dlp, TwitchDownloaderCLI, thư viện Python, backend ASR, CUDA, UTF-8, API key).
-      Ba trạng thái: `[ HỎNG ]` phải sửa, `[THIẾU ]` tùy chọn, `[  OK  ]` đạt.
-- [x] Trên Windows: `setup_logging()` tự ép `sys.stdout`/`stderr` về UTF-8; `doctor` cảnh báo
-      nếu console không phải UTF-8. Mọi `open()` đều đã có `encoding="utf-8"`.
-- [ ] Chạy từng bước một (`fetch` → `preprocess` → `candidates` → `select`), kiểm tra
-      output mỗi bước trước khi sang bước sau.
-- [ ] **WhisperX tiếng Việt** (cần GPU + VOD thật): xác nhận có model căn chỉnh cho `vi`.
-      Đã chuẩn bị sẵn: khoá `asr.align_model` trong `settings.yaml` được truyền thẳng vào
-      `load_align_model(model_name=...)`, và bước 2 cảnh báo to nếu `words.json` rỗng. Nếu `load_align_model`
-      lỗi, code đã fallback về timestamp theo câu — nhưng khi đó `words.json` sẽ rỗng,
-      làm hỏng `snap_to_words` và phụ đề karaoke. Cách xử lý: tìm model wav2vec2 tiếng Việt
-      trên Hugging Face và truyền `model_name=` cho `load_align_model`; hoặc chuyển sang
-      `faster-whisper` với `word_timestamps=True`. Ghi kết quả vào Nhật ký.
-- [x] Lệnh `python run.py inspect --job X` đã có: in bảng giá trị thô (chat, mức nền chat,
-      dB, dB trên nền, từ khóa) và điểm đã chuẩn hóa tại mỗi đỉnh.
-- [ ] **Chất lượng ứng viên** (cần VOD thật): mở `candidates.json`, xem thử 5 ứng viên điểm
-      cao nhất bằng ffplay. Nếu phần lớn là nhiễu, dùng `inspect` rồi chỉnh `refs`/`weights`.
-- [ ] **Claude API thật**: kiểm tra `prompt_last.md` có hợp lý không; kích thước prompt
-      (token vào). Nếu > 60k token, giảm `top_k` hoặc rút gọn transcript.
-- [x] Lỗi API: `pipeline/claude_api.py` đặt `max_retries=3` (SDK tự backoff lũy thừa cho
-      429/5xx) và dịch từng loại lỗi thành câu tiếng Việt nói rõ phải làm gì.
-- [x] Cửa sổ cuối VOD ngắn hơn nửa `window_sec` đã bị bỏ (`compute_signals`), có test.
-- [x] Log ghi ra `jobs/<job>/pipeline.log` ở mức DEBUG (kèm nguyên lệnh FFmpeg), console INFO.
-- [x] Thêm: `usage.json` ghi token vào/ra và ước tính USD từng lần gọi API (mục 7.3 làm sớm).
+**Chỗ làm khác SPEC, và lý do:**
 
-**Tiêu chí xong:** có `final/highlight.mp4` từ VOD thật, người dùng thấy ít nhất một nửa
-số clip Claude chọn là dùng được.
+1. Import `faster_whisper`/`ollama` bên trong hàm (SPEC §16 import đầu file) — test không cần GPU.
+2. Tham số dựng video chỉ nằm trong profile YAML; `.env.example` để các khóa `MEME_*`,
+   `MAX_MEMES_PER_MINUTE` dạng comment. Nếu không, `.env` luôn đè profile và `--profile` mất
+   tác dụng (mâu thuẫn giữa SPEC §14 và §50).
+3. **Không dùng pydantic-settings** (dù đã được đồng ý cài): tên biến SPEC §14 không theo quy
+   ước lồng nhau của nó (`MEME_COOLDOWN` → `editing.cooldown`), nên dùng bảng `ENV_MAP` +
+   python-dotenv (có sẵn).
+4. Bỏ `requests` (dùng `httpx` khi cần), `opencv-python`, `Pillow`, `orjson` — MVP chưa cần;
+   ffprobe đọc được kích thước ảnh/GIF.
+5. Bỏ `APP_ENV` — không có gì dùng.
+6. SPEC §33 và §50 lệch nhau về chaotic (8 hay 9 meme/phút) — theo §50 (9).
+7. Thêm `automeme doctor` và `data/logs/` (SPEC không có).
+8. `requirements.txt` chỉ chứa `-e .[dev]`; nguồn thật là `pyproject.toml`.
+9. Sắp tới: transcript giữ thêm `words` (timestamp theo từ) ngoài `segments` của SPEC §17;
+   Ollama dùng structured output (`format=` JSON schema từ pydantic); kiểm tra lại repo và API
+   của Meme Search trước Iteration 4, làm `LocalMemeProvider` trước (SPEC §29).
 
 ---
 
-## 5. Tuần 2 — Định dạng dọc + phụ đề karaoke  ✅ ĐÃ XONG
+## 5. Lộ trình — theo SPEC §80, mỗi iteration duyệt kế hoạch riêng
 
-> Khác đặc tả ban đầu ở ba chỗ, đều có lý do:
-> 1. Toạ độ được làm tròn **xuống** số chẵn (không phải tròn gần nhất) — tròn lên có thể đẩy
->    vùng cắt vượt ra ngoài khung nguồn; test `test_vung_cat_luon_nam_trong_khung` bắt lỗi này.
-> 2. Escape ASS: `{`, `}`, `\` được đổi thành `(`, `)`, `/` chứ không escape, vì libass không
->    có cách escape đáng tin cậy cho ba ký tự này. Lời nói tiếng Việt gần như không chứa chúng.
-> 3. Phần "gửi phụ đề cho Haiku sửa lỗi chính tả" (cuối 5.2) **chưa làm** — để lại cho sau,
->    vì cần đo trên transcript thật mới biết có đáng không.
+### Iteration 1 — Transcription (SPEC §15–17, Milestone 1)  ← TIẾP THEO
 
-### 5.1 Layout dọc (1080×1920)
+- `src/automeme/transcription/{base,whisper}.py`: interface `Transcriber` (SPEC §13),
+  `FasterWhisperTranscriber` (VAD, `word_timestamps=True`, beam theo config).
+- Hàm thuần `normalize_transcript(...)` → schema SPEC §17 (`video, language, duration,
+  segments[id,start,end,text]`) + `words[w,start,end]`. Bỏ đoạn rỗng, đảm bảo timestamp tăng dần.
+- Nơi lưu và khóa cache: SPEC §17 ghi `data/transcripts/<tên>.json`, §48 ghi
+  `cache/<hash>/…` phụ thuộc hash video + model + ngôn ngữ. Chốt một cách trong kế hoạch.
+- Nối vào CLI: hàm `bootstrap(profile)` (nạp cấu hình theo profile), lệnh `transcribe`.
+- Giải phóng model sau khi xong (để VRAM cho Ollama).
+- **Rủi ro số 1:** faster-whisper chạy GPU trên Windows cần thêm cuBLAS + cuDNN 9 cho CUDA 12
+  (pip `nvidia-cublas-cu12`, `nvidia-cudnn-cu12` rồi thêm thư mục `bin` vào PATH), không thì
+  chạy CPU `int8`. Hỏi trước khi cài.
+- Xong khi: `automeme transcribe video.mp4` ra transcript tiếng Việt đúng dấu trên video thật.
 
-Module mới: `pipeline/layout.py` (hàm thuần dựng filtergraph) + mở rộng `s7_render.py`.
+### Iteration 2 — Timeline + renderer (SPEC §34–41, §54, Milestone 3)
 
-Preset streamer đã có `facecam: {x, y, w, h}` (tọa độ trên khung 1920×1080). Thêm:
+- `timeline/schema.py` (event tổng quát SPEC §73: `meme`, sau này `sfx`, `zoom`…),
+  `timeline/validator.py` (SPEC §54), `rendering/filters.py` (hàm thuần dựng filtergraph),
+  `rendering/renderer.py`.
+- Overlay 5 vị trí, rộng 30% khung (SPEC §37–38), `enable='between(t,a,b)'`; ảnh tĩnh
+  `-loop 1`, GIF lặp (`-ignore_loop 0`) + dời PTS về thời điểm bắt đầu; audio gốc giữ nguyên.
+- Lệnh `render <video> --timeline <file>`, `inspect <timeline>`.
+- Test: chuỗi filter, validator; tích hợp với video 5 giây sinh bằng lavfi + PNG tự sinh (SPEC §57).
+- Xong khi: timeline viết tay chèn đúng PNG/JPG/GIF.
 
-```yaml
-doc:
-  kieu: cam_tren          # cam_tren | khong_cam
-  gameplay_center_x: 960  # tâm vùng cắt gameplay theo chiều ngang
-  ti_le_cam: 0.32         # facecam chiếm 32% chiều cao khung dọc
-```
+### Iteration 3 — Phân tích bằng LLM (SPEC §18–24, §51–53)
 
-- **cam_tren**: facecam cắt từ preset → scale rộng 1080, cao `round(1920*ti_le_cam)` (giữ
-  tỉ lệ bằng cách crop thêm nếu cần); gameplay cắt vùng có tỉ lệ `1080 : (1920 - h_cam)`
-  quanh `gameplay_center_x`, full chiều cao nguồn → scale về 1080×(1920 − h_cam); `vstack`.
-- **khong_cam** (streamer không bật cam): nền là chính khung hình phóng to + `boxblur`,
-  gameplay giữ tỉ lệ đặt giữa.
-- Nguồn không phải 1920×1080: đọc kích thước bằng `ffprobe`, quy đổi tọa độ preset theo tỉ lệ.
-- Hàm `build_vertical_filter(src_w, src_h, preset) -> str` là hàm thuần, có test so khớp chuỗi
-  và kiểm tra kích thước đầu ra luôn chẵn (libx264 yêu cầu).
+- `analyzer/context.py` (cửa sổ: 2 đoạn trước, 1 đoạn sau — đưa vào config), `analyzer/llm.py`
+  (`OllamaLLM`, `ClaudeLLM`), `prompts/meme_detector.txt` (SPEC §21), model `MemeOpportunity`
+  (SPEC §24), hàm thuần lọc: ngưỡng confidence, cooldown, mật độ, kẹp thời lượng.
+- Cần cài: ứng dụng Ollama + `ollama pull qwen3:8b`, thư viện `ollama` (hỏi trước). qwen3 có
+  chế độ "thinking" — tắt khi cần JSON.
+- Test: context window, validate, bộ lọc, LLM giả lập trả JSON hỏng → thử lại → bỏ qua.
 
-### 5.2 Phụ đề karaoke (.ass)
+### Iteration 4 — Tìm meme, xếp hạng, `automeme run` (SPEC §25–33, §43)
 
-Module mới: `pipeline/subtitles.py`.
+- `memes/base.py` (`MemeProvider`), `memes/local.py` (metadata SPEC §26, tìm theo tag/từ khóa),
+  `memes/ranker.py` (trọng số SPEC §30 đưa vào config, phạt trùng SPEC §31),
+  `timeline/builder.py` (thời điểm SPEC §52: cuối câu + 0.10–0.30 s), `pipeline.py`, lệnh `run`.
+- `memes/meme_search.py` (HTTP) sau khi xác minh API thật.
+- Xong khi: đạt định nghĩa MVP ở mục 1.
 
-- Input: `words.json` lọc trong khoảng `[clip.start, clip.end]`, đổi về thời gian tương đối.
-- Gom từ thành dòng: tối đa ~5 từ hoặc ~28 ký tự; ngắt dòng khi khoảng lặng > 0.6s.
-- Mỗi dòng một `Dialogue`; hiệu ứng tô chữ theo từ bằng tag `\k<centiseconds>` (tính từ
-  độ dài mỗi từ + khoảng lặng trước nó). Có thể dùng thêm `\t` để phóng nhẹ từ đang nói.
-- Escape ký tự đặc biệt trong ASS: `{`, `}`, `\`. Test riêng cho việc này.
-- Style mặc định cho dọc: font hỗ trợ đầy đủ dấu tiếng Việt (ví dụ **Be Vietnam Pro** hoặc
-  **Roboto** — đặt file font trong `assets/fonts/` và truyền `fontsdir`), cỡ ~80, viền 5,
-  `PlayResX=1080, PlayResY=1920`, đặt ở ranh giới facecam/gameplay (`MarginV`). Style cho
-  ngang: cỡ nhỏ hơn, đặt dưới.
-- Burn bằng filter `subtitles=`/`ass=` của FFmpeg. **Cảnh báo Windows**: đường dẫn trong
-  filter phải escape dấu `:` và `\` (`C\:/path/file.ass`). Cách an toàn nhất: chạy FFmpeg
-  với `cwd` là thư mục chứa file `.ass` và dùng tên file tương đối.
-- Tùy chọn (bật bằng cờ): gửi các dòng phụ đề cho Claude Haiku sửa lỗi chính tả ASR, **giữ
-  nguyên số từ** để không lệch timestamp; `validate` số từ, lệch thì dùng bản gốc.
-  Prompt đặt ở `prompts/fix_subtitles.md`.
+### Sau MVP
 
-### 5.3 CLI
-
-`python run.py render --job X --format ngang|doc|ca-hai [--preview]`. Output:
-`final/c01_ngang.mp4`, `final/c01_doc.mp4`.
-
-**Tiêu chí xong:** clip dọc 30 giây có facecam trên/gameplay dưới đúng vị trí, phụ đề
-tiếng Việt đủ dấu, chữ tô theo lời nói lệch không quá ~0.2s.
+Stage F (cache, resume, xử lý lỗi, integration test), Stage G (giao diện duyệt) — SPEC §79.
+Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke → `CaptionEvent`),
+`layout.py` (khung dọc 9:16), `claude_api.py`.
 
 ---
 
-## 6. Tuần 3 — Thư viện meme & chèn meme tự động
+## 6. Checklist (SPEC §79)
 
-### 6.1 Thư viện
+**Stage A**
+- [x] Project structure
+- [x] Virtual environment
+- [x] Configuration
+- [x] Logging
+- [x] FFmpeg detection
 
-`meme_library/library.jsonl` (đã có mẫu). Bổ sung trường `tags` (dùng để lọc theo
-`meme_cam` của preset) và `am_luong` (hệ số âm lượng, mặc định 1.0).
+**Stage B**
+- [~] Extract audio — hàm `extract_audio` có và đã test thật, chưa nối vào CLI
+- [ ] Whisper model loading
+- [ ] Vietnamese transcription
+- [ ] Timestamp normalization
+- [ ] Save transcript.json
 
-Script `python run.py meme-tag`:
-- Ảnh: gửi ảnh cho Claude Haiku (vision) → gợi ý `dung_khi` + `tags`.
-- Video phông xanh: trích frame giữa bằng FFmpeg → gửi như ảnh.
-- SFX: Claude không nghe được âm thanh → chỉ liệt kê các file còn thiếu mô tả để người điền.
-- **Không ghi đè** trường người đã điền tay. Chỉ điền trường còn trống.
-- Chuẩn hóa âm lượng mọi SFX một lần về ~ −16 LUFS (`loudnorm`), lưu bản chuẩn hóa cạnh bản gốc.
+**Stage C**
+- [ ] Timeline schema
+- [ ] Manual timeline
+- [ ] PNG overlay
+- [ ] JPG overlay
+- [ ] GIF overlay
+- [ ] MP4 output
 
-### 6.2 Chọn meme — `pipeline/s5_memes.py`
+**Stage D**
+- [ ] Ollama adapter
+- [ ] Prompt manager
+- [ ] Context windows
+- [ ] Meme opportunity detection
+- [ ] JSON validation
 
-- Chạy cho từng clip đã duyệt. Prompt `prompts/insert_memes.md`.
-- Input cho Claude: transcript theo từ của clip (thời gian tương đối), chat trong clip,
-  thư viện đã lọc bỏ meme có tag cấm, `mat_do_meme_sec`, phong cách kênh, ví dụ phản hồi
-  `kind: "meme"`.
-- Tool `submit_memes`, mỗi phần tử:
-  `{id, t, vi_tri: giua|tren_trai|tren_phai|duoi_trai|duoi_phai|facecam, kich_thuoc: 0.2–0.6, ly_do}`.
-- `validate_memes` (hàm thuần, có test):
-  - `id` có trong thư viện và không bị cấm;
-  - `t` trong `[0.3, thời lượng clip − dai]`;
-  - khoảng cách giữa hai meme ≥ `mat_do_meme_sec`;
-  - ảnh/video meme không đè vùng phụ đề;
-  - SFX: dời `t` về cuối từ gần nhất nếu trong vòng 0.5s (meme hài nhất khi rơi ngay sau câu nói).
-- Output: `jobs/<job>/memes/c01.json`.
+**Stage E**
+- [ ] Meme Search installation
+- [ ] Meme Search adapter
+- [ ] Semantic query
+- [ ] Top-K retrieval
+- [ ] Ranking
+- [ ] Duplicate penalty
 
-### 6.3 Dựng meme — `pipeline/meme_render.py`
+**Stage F**
+- [ ] Complete pipeline
+- [ ] Cache
+- [ ] Resume
+- [ ] Error handling
+- [ ] Integration tests
 
-Dựng filtergraph bằng code (hàm thuần `build_meme_filter(events, layout) -> (filter, inputs)`),
-**không** viết tay. Thứ tự lớp cho mỗi clip:
-
-1. Cắt clip → 2. hiệu ứng lên nguồn (`zoom_mat`: phóng vào vùng facecam; `rung_man_hinh`:
-   crop với offset dao động theo `t`) → 3. layout (ngang/dọc) → 4. overlay ảnh/GIF/phông xanh
-   theo tọa độ khung đầu ra (`overlay=...:enable='between(t,a,b)'`; phông xanh dùng
-   `colorkey` + `setpts=PTS+t/TB`) → 5. phụ đề (luôn nằm trên meme) → 6. trộn âm SFX
-   (`adelay` + `amix=normalize=0`, áp `am_luong`).
-
-Nếu filtergraph FFmpeg trở nên quá phức tạp cho hiệu ứng động (bật nảy, easing), cân nhắc
-Remotion — nhưng **hỏi người dùng trước**, vì thêm Node.js vào dự án.
-
-### 6.4 Duyệt
-
-Bản preview có meme; ở bước duyệt cho phép bỏ từng meme. Ghi phản hồi `kind: "meme"`.
-
-**Tiêu chí xong:** clip có 2–5 meme, đúng thời điểm, không đè phụ đề, âm lượng SFX đồng đều.
-
----
-
-## 7. Tuần 4 — Trang duyệt web, metadata, hoàn thiện
-
-### 7.1 Trang duyệt web — `python run.py review-web --job X`
-
-- Server cục bộ (ưu tiên stdlib `http.server`; nếu cần, Flask — hỏi trước), mở trình duyệt.
-- Mỗi clip: video preview, tiêu đề, lý do, điểm; nút Giữ/Loại; ô ghi chú; danh sách meme
-  có thể bỏ từng cái; ô "sửa bằng lời" (ví dụ "cắt sớm 3 giây, bỏ meme thứ 2") → gửi
-  Claude sửa JSON → validate → render lại preview clip đó.
-- Lưu ngay vào `clips.json`, `memes/*.json`, `feedback/examples.jsonl`.
-
-### 7.2 Metadata — `pipeline/s8_metadata.py`
-
-- Tiêu đề (3 phương án), mô tả, tags, chapter cho `highlight.mp4` (tính từ thứ tự và thời
-  lượng các clip). Prompt `prompts/metadata.md`. Dùng Haiku.
-- Thumbnail: trích ~12 frame tại các đỉnh âm lượng trong clip điểm cao nhất; Claude (vision)
-  chọn 3 frame có biểu cảm streamer rõ nhất. Lưu `final/thumbs/`.
-- Output `final/metadata.json`.
-
-### 7.3 Hoàn thiện
-
-- `jobs/<job>/usage.json`: token vào/ra theo từng bước + ước tính chi phí.
-- Lệnh `python run.py status --job X`: bước nào đã xong, bao nhiêu clip duyệt, chi phí.
-- Chạy song song render nhiều clip (`concurrent.futures`, giới hạn theo số nhân CPU).
-- Cập nhật README cho người dùng cuối.
+**Stage G**
+- [ ] Preview UI
+- [ ] Accept/reject meme
+- [ ] Replace meme
+- [ ] Adjust timestamp
+- [ ] Render
 
 ---
 
-## 8. Checklist tổng
+## 7. Việc người dùng cần tự làm
 
-- [x] Tuần 1: tải, tiền xử lý, ứng viên, Claude chọn clip, duyệt terminal, render ngang
-- [~] Tuần 1.5: phần code đã gia cố xong (doctor, inspect, log file, usage.json, retry API,
-      cửa sổ cuối, align_model). **Còn lại: chạy thật trên VOD của bạn** — xem mục 4.
-- [x] Tuần 2: layout dọc (5.1)
-- [x] Tuần 2: phụ đề karaoke (5.2) — trừ phần Haiku sửa chính tả
-- [x] Tuần 2: CLI định dạng (5.3)
-- [ ] Tuần 3: gắn nhãn thư viện meme (6.1)
-- [ ] Tuần 3: chọn meme + validate (6.2)
-- [ ] Tuần 3: dựng meme (6.3)
-- [ ] Tuần 3: duyệt meme (6.4)
-- [ ] Tuần 4: trang duyệt web (7.1)
-- [ ] Tuần 4: metadata + thumbnail (7.2)
-- [ ] Tuần 4: hoàn thiện (7.3)
+- Tạo `.env`: `Copy-Item .env.example .env` (chưa bắt buộc — thiếu thì dùng mặc định).
+- Chọn license cho code (MIT hoặc Apache-2.0) — chưa có file `LICENSE`.
+- Trước Iteration 3: cài Ollama, `ollama pull qwen3:8b`.
+- Chuẩn bị 1–2 video tiếng Việt 30–90 giây để chạy thật từ Iteration 1.
 
 ---
 
-## 9. Nhật ký tiến độ
+## 8. Nhật ký tiến độ
 
-> Claude Code: thêm một mục sau mỗi phiên làm việc — đã làm gì, quyết định gì, vấn đề còn tồn tại.
-> Mới nhất ở trên cùng.
+> Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
+> Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
 
-### 2026-09-10 (phiên 2) — Gia cố tuần 1.5 (phần code) + trọn tuần 2 (Claude Code)
+### 2026-09-11 — Chuyển sang automeme + Stage A (Claude Code)
 
-**Môi trường.** Python trên PATH là bản *embeddable* 3.13 (không có `venv`, không cài được thư
-viện) → dựng `.venv` bằng Python 3.11 có sẵn ở
-`C:\Users\ADMIN\AppData\Local\Programs\Python\Python311`. Cài `requirements-dev.txt`.
-Cài FFmpeg 9.0.1 bằng `winget install Gyan.FFmpeg`.
-**Chạy mọi lệnh qua `.venv\Scripts\python.exe`** (venv chưa được activate sẵn).
-Chưa cài torch/whisperx (nặng, cần GPU) — cài khi bắt đầu chạy VOD thật.
+**Đã làm.**
+- `git init` + commit snapshot hiện trạng (`295a69f`) trước khi tái cấu trúc.
+- Chuyển code cũ vào `legacy/stream_editor/` bằng `git mv`, kể cả HANDOFF cũ. Kiểm tra lại:
+  58 test cũ vẫn xanh khi chạy trong thư mục đó.
+- File README người dùng gửi → `docs/SPEC.md` (giữ nguyên văn, thêm 1 dòng ghi chú đầu file).
+- Dựng khung theo SPEC §12: `pyproject.toml` (lệnh `automeme`, nhóm cài thêm `[asr]`, `[claude]`,
+  `[dev]`), `src/automeme/` (cli, config, doctor, media/, utils/), `configs/` (default + 3
+  profile), `.env.example`, `.gitignore`, `data/*`, `assets/*`, `prompts/`.
+- Cài vào `.venv`: typer 0.27.2 (kéo theo rich 15), ruff 0.16.7, pytest-cov 7.1; automeme ở
+  chế độ editable.
+- Viết lại README.md, file này, CLAUDE.md, 3 skill, CI (thêm FFmpeg + ruff).
 
-**Đã làm — gia cố (mục 4).**
-- `run.py doctor` — bảng kiểm tra môi trường 3 mức (HỎNG / THIẾU / OK), tìm cả binary trong
-  `Scripts/` của venv.
-- `run.py inspect --job X` — bảng điểm từng tín hiệu tại mỗi đỉnh; `combine` được tách thành
-  `combine_parts` để lấy được đóng góp của từng tín hiệu.
-- `pipeline/claude_api.py` — lớp bao SDK: `max_retries=3`, `call_tool`, dịch lỗi sang tiếng Việt.
-- `usage.json` (token + ước tính USD) và `pipeline.log` (mức DEBUG, kèm nguyên lệnh FFmpeg).
-- Bỏ cửa sổ cuối VOD khi ngắn hơn nửa `window_sec`; `asr.align_model` cấu hình được.
+**Kết quả.** 73 test xanh, ruff sạch. `automeme doctor` trên máy người dùng: bắt buộc đều đạt;
+thiếu `.env`, faster-whisper, Ollama (đúng dự kiến). `automeme --help`,
+`python -m automeme …` chạy được; file log ghi đúng tiếng Việt kèm lệnh DEBUG.
 
-**Đã làm — tuần 2.** `pipeline/layout.py`, `pipeline/subtitles.py`, `s7_render.py` viết lại,
-`--format ngang|doc|ca-hai`, khối `phu_de` trong `settings.yaml`, khối `doc` trong preset
-streamer, `assets/fonts/` + tự truyền `fontsdir`. 13 → **58 test**, đều xanh.
+**Còn tồn tại.** Chưa có Ollama, faster-whisper, `.env`, `LICENSE`. Chưa commit phần tái cấu
+trúc (chờ người dùng đồng ý).
 
-**Quyết định đáng nhớ.**
-- *Không* tự viết vòng retry: SDK Anthropic đã tự backoff lũy thừa cho 429/5xx, chỉ cần
-  `max_retries=3` khi tạo client.
-- Toạ độ và kích thước làm tròn **xuống** số chẵn, không phải tròn gần nhất. Tròn gần nhất
-  từng đẩy vùng cắt gameplay ra ngoài khung (cho ra `y=2, h=1080` trên nguồn cao 1080) — test
-  `test_vung_cat_luon_nam_trong_khung` bắt được.
-- Đường dẫn trong filter FFmpeg: chạy FFmpeg với `cwd` = thư mục `subs/`, truyền tên file .ass
-  tương đối và `fontsdir` tương đối dùng dấu `/`. Nhờ vậy chuỗi filter không bao giờ chứa `:`
-  hay `\` — né hẳn lỗi escape trên Windows thay vì đi tìm cách escape cho đúng.
-- Sửa `models.cheap` thành `claude-haiku-4-5` (bỏ hậu tố ngày). Bảng giá đặt ở `common.PRICING`,
-  khớp theo tiền tố nên id có hậu tố ngày vẫn tính đúng chi phí.
-
-**Đã chạy thật (dựng lại được).** Video tự sinh, không cần VOD:
-
-```bash
-mkdir -p jobs/smoketest/raw
-ffmpeg -y -f lavfi -i testsrc2=size=1920x1080:rate=30:duration=20 \
-       -f lavfi -i "sine=frequency=440:duration=20" \
-       -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -shortest \
-       jobs/smoketest/raw/vod.mp4
-# rồi tạo tay: job.json, transcript/words.json, clips.json (1 clip approved: true)
-python run.py render --job smoketest --format ca-hai
-```
-
-Kết quả: `c01_ngang.mp4` 1920×1080, `c01_doc.mp4` 1080×1920, preview 270×480; facecam trên /
-gameplay dưới đúng vị trí; phụ đề đủ dấu tiếng Việt. Tại giây thứ 2 các từ đã nói hiện màu
-vàng, từ chưa tới màu trắng — tag `\k` hoạt động đúng.
-
-**Còn tồn tại.**
-- Chưa chạy trên VOD thật: WhisperX tiếng Việt, Claude API thật, yt-dlp live chat.
-- `facecam` trong `streamer_example.yaml` vẫn là số ví dụ — phải đo lại trên một khung hình
-  thật trước khi tin kết quả bản dọc.
-- Chưa làm: dùng Haiku sửa lỗi chính tả phụ đề (đoạn cuối mục 5.2).
-
-**Việc tiếp theo:** hoặc chạy thật tuần 1.5 trên một VOD 30–60 phút, hoặc sang tuần 3 (meme).
-
-### 2026-09-10 — Khởi tạo (Claude trên claude.ai)
-- Dựng khung repo và pipeline tuần 1; 13 test xanh; chạy thử đầu-cuối với video giả lập.
-- Quyết định: chuẩn hóa tín hiệu theo mức tham chiếu cố định thay vì phân vị (phân vị đẩy
-  nhiễu chat lên ngang đỉnh thật); gộp tin chat trùng nội dung khi dựng prompt để tiết kiệm token.
-- Chưa rõ: nền tảng stream (hỗ trợ cả hai), layout facecam, cấu hình máy người dùng.
+**Việc tiếp theo:** Iteration 1 — transcription.

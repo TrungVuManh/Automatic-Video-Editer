@@ -1,0 +1,51 @@
+# Cấu hình mặc định — đầy đủ mọi khóa.
+#
+# Thứ tự ưu tiên (cao đè thấp):
+#   cờ CLI  >  biến môi trường / .env  >  profile (--profile <tên>)  >  file này
+#
+# Profile là configs/<tên>.yaml, chỉ cần ghi các khóa muốn đổi.
+# Tên biến môi trường tương ứng xem .env.example.
+
+app:
+  log_level: INFO            # DEBUG | INFO | WARNING | ERROR (console; file log luôn DEBUG)
+
+paths:
+  data_dir: data             # tương đối so với thư mục gốc dự án
+  assets_dir: assets
+
+whisper:
+  model: large-v3
+  language: vi
+  device: cuda               # cuda | cpu | auto
+  compute_type: float16      # float16 (GPU) | int8_float16 | int8 (CPU)
+  beam_size: 5
+
+llm:
+  backend: ollama            # ollama (local, mặc định) | claude (cần ANTHROPIC_API_KEY)
+
+ollama:
+  host: http://localhost:11434
+  model: qwen3:8b            # máy yếu hơn: qwen3:4b
+
+claude:
+  model: claude-sonnet-5
+
+meme_search:
+  base_url: http://127.0.0.1:3000
+  token: ""
+  top_k: 10
+
+editing:
+  max_memes_per_minute: 5
+  cooldown: 7.0              # giây tối thiểu giữa hai meme
+  threshold: 0.65            # bỏ cơ hội có confidence thấp hơn mức này
+
+meme:
+  duration_min: 0.8          # giây
+  duration_max: 2.5
+
+output:
+  video_codec: libx264
+  audio_codec: aac
+  crf: 18
+  preset: medium

@@ -1,0 +1,5 @@
+# Mật độ vừa phải cho video hài (SPEC §50).
+editing:
+  max_memes_per_minute: 5
+  cooldown: 6
+  threshold: 0.65

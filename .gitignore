@@ -1,30 +1,51 @@
 # Bí mật
 .env
 
-# Dữ liệu từng VOD (rất nặng) — chỉ giữ thư mục rỗng
-jobs/*
-!jobs/.gitkeep
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# Test / lint
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Dữ liệu từng video (nặng) — chỉ giữ cấu trúc thư mục
+data/*/*
+!data/*/.gitkeep
+
+# Meme, GIF, SFX có thể dính bản quyền (SPEC §56) — người dùng tự thêm
+assets/memes/*
+!assets/memes/.gitkeep
+assets/gifs/*
+!assets/gifs/.gitkeep
+assets/sfx/*
+!assets/sfx/.gitkeep
 
 # Font tự tải về (giấy phép riêng) — chỉ commit README hướng dẫn
 assets/fonts/*
 !assets/fonts/README.md
 
-# File media trong thư viện meme (có thể dính bản quyền) — chỉ commit library.jsonl
-meme_library/**/*.mp4
-meme_library/**/*.mov
-meme_library/**/*.webm
-meme_library/**/*.mp3
-meme_library/**/*.wav
-meme_library/**/*.png
-meme_library/**/*.jpg
-meme_library/**/*.gif
+# Model tải về
+models/
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-.pytest_cache/
+# Code cũ (stream-auto-editor): dữ liệu job và media
+legacy/stream_editor/jobs/*
+!legacy/stream_editor/jobs/.gitkeep
+legacy/stream_editor/meme_library/**/*.mp4
+legacy/stream_editor/meme_library/**/*.mov
+legacy/stream_editor/meme_library/**/*.webm
+legacy/stream_editor/meme_library/**/*.mp3
+legacy/stream_editor/meme_library/**/*.wav
+legacy/stream_editor/meme_library/**/*.png
+legacy/stream_editor/meme_library/**/*.jpg
+legacy/stream_editor/meme_library/**/*.gif
 
 # OS / IDE
 .DS_Store

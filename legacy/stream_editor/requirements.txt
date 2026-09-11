@@ -1,0 +1,7 @@
+# Lõi pipeline (nhẹ, cài được mọi nơi)
+anthropic>=0.40
+pyyaml>=6.0
+numpy>=1.26
+soundfile>=0.12
+python-dotenv>=1.0
+yt-dlp>=2025.1.1

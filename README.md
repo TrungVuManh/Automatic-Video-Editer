@@ -1,132 +1,118 @@
-# stream-auto-editor
+# Auto Meme Video Editor (`automeme`)
 
-Pipeline tự động cắt highlight và chèn meme cho video stream game, dùng **Claude** để ra quyết
-định và **FFmpeg** để dựng. Một lệnh cho mỗi VOD; người chỉ cần duyệt khoảng 15–20 phút.
+AI phân tích lời thoại trong video tiếng Việt, tìm khoảnh khắc nên chèn meme/reaction, tìm
+meme phù hợp theo ngữ nghĩa và render vào đúng lúc. Chạy local: **faster-whisper** nghe,
+**Ollama** quyết định, **FFmpeg** dựng.
 
 ```
-VOD + chat ──► transcript, âm lượng ──► ứng viên (máy lọc) ──► Claude chọn & cắt ──► duyệt ──► render
-   bước 1            bước 2                 bước 3                 bước 4            4b     ngang + dọc
-                                                                                            có phụ đề
+video → audio → transcript → LLM tìm khoảnh khắc → tìm & xếp hạng meme → timeline.json → duyệt → render
 ```
+
+Mọi quyết định của AI nằm trong `timeline.json` để người sửa được trước khi render — AI không
+render trực tiếp.
 
 ## Trạng thái
 
-| Tuần | Nội dung | Trạng thái |
+| Bước | Nội dung | Trạng thái |
 |---|---|---|
-| 1 | Tải VOD/chat, transcript, chấm điểm ứng viên, Claude chọn clip, duyệt, render ngang | ✅ |
-| 2 | Định dạng dọc (facecam trên / gameplay dưới), phụ đề karaoke | ✅ |
-| 3 | Thư viện meme có nhãn, Claude chèn meme, script kiểm tra mật độ | ⏳ |
-| 4 | Trang duyệt HTML, vòng phản hồi, metadata (tiêu đề, mô tả, thumbnail) | ⏳ |
+| Stage A | Khung dự án, cấu hình + profile, log, `automeme doctor` | ✅ |
+| Iteration 1 | `automeme transcribe` → `transcript.json` | ⏳ |
+| Iteration 2 | `timeline.json` + render meme PNG/JPG/GIF | ⏳ |
+| Iteration 3 | Ollama tìm khoảnh khắc → `analysis.json` | ⏳ |
+| Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ⏳ |
 
-Đặc tả chi tiết và nhật ký tiến độ: [`docs/HANDOFF.md`](docs/HANDOFF.md).
+Đặc tả đầy đủ: [`docs/SPEC.md`](docs/SPEC.md). Tiến độ và các quyết định đã chốt:
+[`docs/HANDOFF.md`](docs/HANDOFF.md).
 
-## Cài đặt
+## Cài đặt (Windows, PowerShell)
 
 **1. Công cụ hệ thống**
 
-- Python 3.10+
-- [FFmpeg](https://ffmpeg.org/download.html) (bản đầy đủ, có `ffplay`) — thêm vào `PATH`
-- Nếu dùng Twitch: [TwitchDownloaderCLI](https://github.com/lay295/TwitchDownloader/releases) — thêm vào `PATH`
+- Python 3.10+ (khuyên 3.11)
+- FFmpeg: `winget install Gyan.FFmpeg`
+- Ollama (cần từ Iteration 3): `winget install Ollama.Ollama`, rồi `ollama pull qwen3:8b`
+- Docker Desktop — chỉ cần nếu dùng Meme Search
 
-**2. Thư viện Python**
+**2. Môi trường Python**
 
-```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate    |    Linux/macOS: source .venv/bin/activate
-pip install -r requirements-dev.txt
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+Copy-Item .env.example .env
 ```
 
-**3. Nhận dạng giọng nói (cần GPU NVIDIA để chạy nhanh)**
+PowerShell chặn script thì chạy một lần:
+`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`.
+Không muốn kích hoạt venv: gọi thẳng `.\.venv\Scripts\automeme.exe` hoặc
+`.\.venv\Scripts\python.exe -m automeme`.
 
-Cài PyTorch bản CUDA theo hướng dẫn tại pytorch.org, sau đó:
+Nhận dạng giọng nói (cần từ Iteration 1): `python -m pip install -e ".[asr]"`.
 
-```bash
-pip install -r requirements-asr.txt
+**3. Kiểm tra**
+
+```powershell
+automeme doctor
 ```
 
-Nếu WhisperX khó cài trên Windows, đổi `asr.backend` thành `faster-whisper` trong `config/settings.yaml`.
-
-**4. API key**
-
-```bash
-cp .env.example .env     # rồi điền ANTHROPIC_API_KEY
-```
-
-**5. Kiểm tra lại toàn bộ**
-
-```bash
-python run.py doctor
-```
-
-In bảng cho biết thiếu gì và cách khắc phục. Mục `[ HỎNG ]` phải xử lý hết; `[THIẾU ]`
-là tùy chọn (ví dụ TwitchDownloaderCLI chỉ cần khi lấy chat Twitch).
+Mục `[ HỎNG ]` phải xử lý hết; `[THIẾU ]` là thứ chưa cần cho bước hiện tại.
 
 ## Sử dụng
 
-**Tạo preset streamer** (một lần): sao chép `config/streamer_example.yaml` thành
-`config/<ten>.yaml` và sửa phong cách, từ khóa, nội dung cấm. Mô tả phong cách càng cụ thể,
-Claude chọn clip càng đúng gu.
-
-**Chạy cho một VOD:**
-
-```bash
-# Bước 1–4: tải, transcript, lọc ứng viên, Claude chọn clip
-python run.py all --job 2026-09-10_vod01 --streamer ten --platform youtube --url "https://..."
-
-# Duyệt clip trên terminal: y giữ / n loại / p xem thử / s để sau
-python run.py review --job 2026-09-10_vod01
-
-# Render bản xem nhanh 480p, rồi bản cuối
-python run.py render --job 2026-09-10_vod01 --preview
-python run.py render --job 2026-09-10_vod01 --format ca-hai
+```powershell
+automeme --help
+automeme doctor                    # kiểm tra môi trường
+automeme doctor --profile subtle   # kiểm tra kèm một profile
 ```
 
-`--format` nhận `ngang` (YouTube), `doc` (Shorts/TikTok 1080×1920) hoặc `ca-hai`; bỏ trống
-thì lấy `render.dinh_dang` trong `settings.yaml`. Kết quả ở `jobs/<job>/final/`:
-`c01_ngang.mp4`, `c01_doc.mp4`… và `highlight_<định dạng>.mp4` ghép sẵn.
+`transcribe`, `analyze`, `inspect`, `render`, `run` đã có tên nhưng chưa làm — chạy sẽ báo lệnh
+đó thuộc iteration nào. Mục tiêu cuối MVP (SPEC §78):
 
-Phụ đề karaoke (chữ đổi màu theo lời nói) được burn sẵn, dựng từ timestamp theo từ trong
-`transcript/words.json`. Tắt bằng `render.phu_de: false`. File `.ass` sinh ra được giữ lại ở
-`jobs/<job>/subs/` để sửa tay nếu cần.
+```powershell
+automeme run input.mp4 --profile funny
+```
 
-Mỗi bước bỏ qua nếu output đã tồn tại, nên có thể chạy lại từ giữa chừng. Muốn làm lại một
-bước, xóa file output của bước đó (ví dụ `candidates/candidates.json`) rồi chạy lại.
+## Cấu hình
 
-Chạy thử với video có sẵn (không tải): thay `--url` bằng `--video duong_dan.mp4`
-(và `--chat chat.json` nếu có).
+Thứ tự ưu tiên, cao đè thấp:
+
+```
+cờ CLI  >  biến môi trường / .env  >  profile (--profile)  >  configs/default.yaml
+```
+
+- `configs/default.yaml` — đủ mọi khóa, có chú thích.
+- `configs/subtle.yaml`, `funny.yaml`, `chaotic.yaml` — profile, chỉ ghi khóa muốn đổi.
+- `.env` — cấu hình của máy (model Whisper, `cuda`/`cpu`, địa chỉ Ollama…). Tên biến xem
+  `.env.example`. Tham số dựng video (`MEME_COOLDOWN`…) để dạng comment: bỏ comment sẽ đè
+  **mọi** profile.
+
+Gõ sai tên khóa hoặc giá trị ngoài khoảng cho phép sẽ bị báo lỗi, không bị lặng lẽ bỏ qua.
+
+Log hiện trên console và ghi đầy đủ (kèm nguyên lệnh FFmpeg) vào `data/logs/automeme.log` —
+gửi file này khi báo lỗi.
 
 ## Cấu trúc
 
 ```
-config/          settings.yaml (chung) + preset từng streamer
-prompts/         prompt gửi Claude
-assets/fonts/    font riêng cho phụ đề (tùy chọn — xem README trong đó)
-pipeline/        mỗi bước một module
-meme_library/    library.jsonl (mô tả meme) — file media không commit
-feedback/        examples.jsonl — lịch sử duyệt, đưa vào prompt lần sau
-jobs/<job>/      dữ liệu từng VOD (không commit)
-tests/           pytest — chạy không cần GPU hay API key
+configs/         default.yaml + profile
+prompts/         prompt gửi LLM (từ Iteration 3)
+src/automeme/    cli, config, doctor, media/ (FFmpeg), utils/
+tests/           pytest — không cần GPU hay Ollama; test FFmpeg tự bỏ qua nếu máy không có
+data/            input, temp, cache, transcripts, timelines, output, logs — không commit
+assets/          memes, gifs, sfx, fonts — người dùng tự thêm, không commit
+docs/            SPEC.md (đặc tả gốc), HANDOFF.md (tiến độ, quyết định)
+legacy/          code cũ stream-auto-editor (cắt highlight stream game) — không bảo trì
 ```
 
-## Tinh chỉnh
+## Phát triển
 
-- **Ứng viên sai nhiều?** Chạy `python run.py inspect --job X` để xem bảng điểm từng tín hiệu
-  (chat, âm lượng, từ khóa) tại mỗi đỉnh, rồi chỉnh `candidates.refs` và `candidates.weights`
-  trong `settings.yaml`. Cột `p.*` là điểm sau chuẩn hóa: luôn kịch trần 1.5 thì tăng mức
-  tham chiếu tương ứng, luôn ~0 thì giảm.
-- **Claude chọn không đúng gu?** Viết lại `phong_cach` trong preset, và ghi chú khi duyệt —
-  ghi chú được đưa vào prompt ở lần chạy sau.
-- **Phụ đề lệch hoặc thiếu dấu?** Chữ tô theo `transcript/words.json`; nếu file này rỗng thì
-  WhisperX chưa căn được theo từ — điền `asr.align_model` (model wav2vec2 tiếng Việt) hoặc đổi
-  `asr.backend` sang `faster-whisper`. Thiếu dấu là do font: thả file font vào `assets/fonts/`
-  và đặt tên font vào `phu_de.font`.
-- **Facecam bị cắt lệch ở bản dọc?** Đo lại `facecam` trong preset streamer trên một khung hình
-  thật, và chỉnh `doc.gameplay_center_x`. Streamer không bật cam thì đặt `doc.kieu: khong_cam`.
-- **Xem prompt thực tế đã gửi:** `jobs/<job>/candidates/prompt_last.md`.
-- **Chi phí API:** `jobs/<job>/usage.json` ghi token vào/ra và ước tính USD từng lần gọi.
-- **Báo lỗi:** gửi kèm `jobs/<job>/pipeline.log` (ghi đầy đủ cả lệnh FFmpeg).
+```powershell
+pytest -q
+ruff check src tests
+```
 
-## Lưu ý bản quyền
+## Bản quyền
 
-Nhạc nền trong stream và meme cắt từ phim/TV là nguồn dính Content ID phổ biến nhất. Ghi rõ
-nguồn và giấy phép của từng meme trong `library.jsonl`, và luôn duyệt bản preview trước khi đăng.
+License cho code chưa chọn (SPEC §83 gợi ý MIT hoặc Apache-2.0). Meme **không** tự động là
+mã nguồn mở: repo không kèm meme, người dùng tự thêm vào `assets/memes/` (SPEC §56).

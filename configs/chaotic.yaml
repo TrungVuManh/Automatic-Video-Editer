@@ -1,0 +1,5 @@
+# Dày đặc meme, ngưỡng thấp (SPEC §50).
+editing:
+  max_memes_per_minute: 9
+  cooldown: 3
+  threshold: 0.5
