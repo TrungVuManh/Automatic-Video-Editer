@@ -22,6 +22,7 @@ Cập nhật checklist + nhật ký sau mỗi việc hoàn thành.
 - `pytest -q` và `ruff check src tests` phải xanh trước khi đề xuất commit; chỉ commit khi
   người dùng đồng ý.
 - Không commit `.env`, file media, `data/`. Hỏi trước khi cài thư viện mới.
+- Thêm/đổi lệnh, cấu hình hoặc bước cài đặt thì cập nhật `docs/GUIDE.md` (hướng dẫn người dùng).
 - `legacy/` là code cũ (cắt highlight stream) — không sửa trừ khi người dùng yêu cầu.
 
 ## Lệnh

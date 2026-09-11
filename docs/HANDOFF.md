@@ -250,12 +250,16 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - Cài vào `.venv`: typer 0.27.2 (kéo theo rich 15), ruff 0.16.7, pytest-cov 7.1; automeme ở
   chế độ editable.
 - Viết lại README.md, file này, CLAUDE.md, 3 skill, CI (thêm FFmpeg + ruff).
+- Theo yêu cầu người dùng: viết `docs/GUIDE.md` — hướng dẫn chi tiết (cài đặt từng bước, bảng
+  giải thích `doctor`, cấu hình + profile, quy trình dự kiến, log, xử lý sự cố, làm việc cùng
+  Claude Code). Thêm quy tắc giữ GUIDE cập nhật vào CLAUDE.md và skill `/tiep-tuc`.
+- Commit: `ed7d5a3` (tái cấu trúc), sau đó một commit riêng cho GUIDE.
 
 **Kết quả.** 73 test xanh, ruff sạch. `automeme doctor` trên máy người dùng: bắt buộc đều đạt;
 thiếu `.env`, faster-whisper, Ollama (đúng dự kiến). `automeme --help`,
 `python -m automeme …` chạy được; file log ghi đúng tiếng Việt kèm lệnh DEBUG.
 
-**Còn tồn tại.** Chưa có Ollama, faster-whisper, `.env`, `LICENSE`. Chưa commit phần tái cấu
-trúc (chờ người dùng đồng ý).
+**Còn tồn tại.** Chưa có Ollama, faster-whisper, `.env`, `LICENSE`. Repo mới ở máy, chưa có
+remote GitHub. `-v` chỉ nhận khi đặt trước tên lệnh (`automeme -v doctor`) — đã ghi trong GUIDE.
 
 **Việc tiếp theo:** Iteration 1 — transcription.

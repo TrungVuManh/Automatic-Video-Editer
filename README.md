@@ -21,8 +21,9 @@ render trực tiếp.
 | Iteration 3 | Ollama tìm khoảnh khắc → `analysis.json` | ⏳ |
 | Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ⏳ |
 
-Đặc tả đầy đủ: [`docs/SPEC.md`](docs/SPEC.md). Tiến độ và các quyết định đã chốt:
-[`docs/HANDOFF.md`](docs/HANDOFF.md).
+**Hướng dẫn chi tiết** (cài đặt từng bước, cấu hình, xử lý sự cố):
+[`docs/GUIDE.md`](docs/GUIDE.md). Đặc tả đầy đủ: [`docs/SPEC.md`](docs/SPEC.md). Tiến độ và các
+quyết định đã chốt: [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 ## Cài đặt (Windows, PowerShell)
 
@@ -101,7 +102,7 @@ src/automeme/    cli, config, doctor, media/ (FFmpeg), utils/
 tests/           pytest — không cần GPU hay Ollama; test FFmpeg tự bỏ qua nếu máy không có
 data/            input, temp, cache, transcripts, timelines, output, logs — không commit
 assets/          memes, gifs, sfx, fonts — người dùng tự thêm, không commit
-docs/            SPEC.md (đặc tả gốc), HANDOFF.md (tiến độ, quyết định)
+docs/            GUIDE.md (hướng dẫn), SPEC.md (đặc tả gốc), HANDOFF.md (tiến độ, quyết định)
 legacy/          code cũ stream-auto-editor (cắt highlight stream game) — không bảo trì
 ```
 

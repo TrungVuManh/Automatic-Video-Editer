@@ -22,6 +22,7 @@ description: Tiếp tục phát triển dự án theo lộ trình trong docs/HAN
    kết quả (kèm lệnh để người dùng tự xem file output).
 7. Cập nhật `docs/HANDOFF.md`: tick checklist, cập nhật mục 2 nếu module/định dạng thay đổi,
    ghi quyết định mới vào mục 4, chuyển nhãn "TIẾP THEO" ở mục 5, thêm một mục vào Nhật ký.
-   Cập nhật bảng trạng thái trong `README.md`.
+   Cập nhật bảng trạng thái trong `README.md`, và `docs/GUIDE.md` (bảng lệnh ở mục 1, bỏ nhãn
+   *(đang xây)* của phần vừa làm, thêm cách dùng + lỗi thường gặp mới vào mục 7).
 8. Tóm tắt ngắn cho người dùng bằng tiếng Việt và đề xuất commit message. Chỉ commit khi
    người dùng đồng ý.
