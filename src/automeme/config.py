@@ -69,10 +69,18 @@ class ClaudeSettings(_Section):
     model: str
 
 
+class AnalyzerSettings(_Section):
+    previous_segments: int = Field(ge=0, le=10)
+    next_segments: int = Field(ge=0, le=10)
+    timing_delay: float = Field(ge=0, le=2.0)
+    max_tokens: int = Field(ge=128, le=8192)
+
+
 class MemeSearchSettings(_Section):
     base_url: str
     token: str
-    top_k: int = Field(ge=1)
+    top_k: int = Field(ge=1, le=20)
+    max_download_mb: float = Field(gt=0, le=500)
 
 
 class EditingSettings(_Section):
@@ -82,8 +90,9 @@ class EditingSettings(_Section):
 
 
 class MemeSettings(_Section):
-    duration_min: float = Field(gt=0)
-    duration_max: float = Field(gt=0)
+    library_file: Path
+    duration_min: float = Field(ge=0.5, le=5.0)
+    duration_max: float = Field(ge=0.5, le=5.0)
     scale_default: float = Field(ge=0.05, le=1.0)
     position_default: Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
     margin_ratio: float = Field(ge=0, le=0.2)
@@ -93,6 +102,26 @@ class MemeSettings(_Section):
         if self.duration_min > self.duration_max:
             raise ValueError(f"duration_min ({self.duration_min}) lớn hơn "
                              f"duration_max ({self.duration_max})")
+        return self
+
+
+class RankingSettings(_Section):
+    semantic_weight: float = Field(ge=0, le=1)
+    emotion_weight: float = Field(ge=0, le=1)
+    style_weight: float = Field(ge=0, le=1)
+    quality_weight: float = Field(ge=0, le=1)
+    novelty_weight: float = Field(ge=0, le=1)
+    duplicate_penalty: float = Field(ge=0, le=1)
+    recent_window: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _tong_trong_so_bang_mot(self) -> RankingSettings:
+        total = (
+            self.semantic_weight + self.emotion_weight + self.style_weight
+            + self.quality_weight + self.novelty_weight
+        )
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"tổng năm trọng số phải bằng 1.0 (đang là {total:g})")
         return self
 
 
@@ -110,9 +139,11 @@ class Settings(_Section):
     llm: LLMSettings
     ollama: OllamaSettings
     claude: ClaudeSettings
+    analyzer: AnalyzerSettings
     meme_search: MemeSearchSettings
     editing: EditingSettings
     meme: MemeSettings
+    ranking: RankingSettings
     output: OutputSettings
 
 
@@ -130,9 +161,12 @@ ENV_MAP: dict[str, tuple[str, str]] = {
     "OLLAMA_HOST": ("ollama", "host"),
     "OLLAMA_MODEL": ("ollama", "model"),
     "CLAUDE_MODEL": ("claude", "model"),
+    "MEME_TIMING_DELAY": ("analyzer", "timing_delay"),
     "MEME_SEARCH_BASE_URL": ("meme_search", "base_url"),
     "MEME_SEARCH_TOKEN": ("meme_search", "token"),
     "MEME_SEARCH_TOP_K": ("meme_search", "top_k"),
+    "MEME_SEARCH_MAX_DOWNLOAD_MB": ("meme_search", "max_download_mb"),
+    "MEME_LIBRARY_FILE": ("meme", "library_file"),
     "MEME_MIN_DURATION": ("meme", "duration_min"),
     "MEME_MAX_DURATION": ("meme", "duration_max"),
     "MEME_COOLDOWN": ("editing", "cooldown"),
@@ -179,6 +213,7 @@ def load_settings(profile: str | None = None, overrides: Mapping[str, Any] | Non
         ) from None
     settings.paths.data_dir = resolve_path(settings.paths.data_dir, root)
     settings.paths.assets_dir = resolve_path(settings.paths.assets_dir, root)
+    settings.meme.library_file = resolve_path(settings.meme.library_file, root)
     return settings
 
 

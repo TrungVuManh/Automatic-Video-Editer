@@ -1,18 +1,19 @@
-"""CLI `automeme` (Typer) — SPEC §44–45.
-
-Lệnh chưa làm sẽ báo rõ thuộc iteration nào trong docs/HANDOFF.md và thoát với mã 1.
-"""
+"""CLI `automeme` (Typer) — SPEC §44–45."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import typer
 
 from .config import ConfigError, Settings, load_settings
 from .media.ffmpeg import CommandError
 from .utils.files import ensure_data_dirs
-from .utils.logger import add_file_log, log, setup_logging
+from .utils.logger import add_file_log, force_utf8_console, log, setup_logging
+
+# Typer có thể render `--help` trước khi callback chạy; ép UTF-8 ngay lúc import để Windows
+# console CP1252 không vỡ ở các mô tả tiếng Việt.
+force_utf8_console()
 
 app = typer.Typer(
     name="automeme",
@@ -86,9 +87,18 @@ def transcribe(video: VideoArg, profile: ProfileOpt = None, force: ForceOpt = Fa
 
 
 @app.command()
-def analyze(video: VideoArg) -> None:
+def analyze(video: VideoArg, profile: ProfileOpt = None, force: ForceOpt = False) -> None:
     """Transcript → các khoảnh khắc nên chèn meme (analysis.json)."""
-    _chua_lam("analyze", "Iteration 3")
+    from .analyzer.schema import AnalysisError, format_analysis_summary
+    from .pipeline import analyze_video
+
+    settings = bootstrap(profile)
+    try:
+        path, analysis_data = analyze_video(video, settings, force=force)
+    except (FileNotFoundError, AnalysisError, RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(format_analysis_summary(analysis_data, path))
 
 
 @app.command()
@@ -152,12 +162,56 @@ def render(
 
 
 @app.command()
-def run(video: VideoArg) -> None:
+def review(
+    video: VideoArg,
+    timeline: Annotated[Path | None, typer.Option(
+        "--timeline", help="Timeline cần duyệt (mặc định theo tên video).",
+    )] = None,
+    out: Annotated[Path | None, typer.Option("--out", help="Nơi lưu khi bấm Render.")] = None,
+    profile: ProfileOpt = None,
+    port: Annotated[int, typer.Option(help="Port loopback; dùng 0 để hệ điều hành tự chọn.",
+                                      min=0, max=65535)] = 8765,
+    no_browser: Annotated[bool, typer.Option(
+        "--no-browser", help="Không tự mở trình duyệt.",
+    )] = False,
+) -> None:
+    """Mở giao diện local để xem, accept/reject, thay meme, chỉnh thời gian và render."""
+    from .review.server import serve_review
+    from .review.service import ReviewError, create_review_session
+    from .timeline.schema import TimelineError
+
+    settings = bootstrap(profile)
+    try:
+        session = create_review_session(
+            video,
+            settings,
+            timeline_path=timeline,
+            output=out,
+        )
+        serve_review(session, port=port, open_browser=not no_browser)
+    except (FileNotFoundError, TimelineError, ReviewError, CommandError,
+            OSError, RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+
+
+@app.command()
+def run(
+    video: VideoArg,
+    profile: ProfileOpt = None,
+    out: Annotated[Path | None, typer.Option("--out", help="Nơi lưu video ra.")] = None,
+    force: ForceOpt = False,
+) -> None:
     """Chạy trọn pipeline: transcribe → analyze → tìm meme → timeline → render."""
-    _chua_lam("run", "Iteration 4")
+    from .analyzer.schema import AnalysisError
+    from .pipeline import run_video
+    from .timeline.schema import TimelineError
 
-
-def _chua_lam(lenh: str, buoc: str) -> NoReturn:
-    log.warning("Lệnh `automeme %s` chưa làm — thuộc %s trong lộ trình (docs/HANDOFF.md).",
-                lenh, buoc)
-    raise typer.Exit(code=1)
+    settings = bootstrap(profile)
+    try:
+        output, timeline = run_video(video, settings, force=force, output=out)
+    except (FileNotFoundError, AnalysisError, TimelineError, CommandError,
+            RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Hoàn tất: {len(timeline.events)} meme → {output}")

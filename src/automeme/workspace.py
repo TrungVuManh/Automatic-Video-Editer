@@ -6,6 +6,7 @@ sau tạo file mới thay vì lặng lẽ dùng lại transcript cũ.
     data/cache/<ten-video>-<hash8>/audio.wav
     data/cache/<ten-video>-<hash8>/transcript-<asr8>.json
     data/transcripts/<ten-video>.json        ← bản mới nhất, các bước sau đọc file này
+    data/analysis/<ten-video>.json           ← cơ hội meme sau khi lọc
     data/timelines/<ten-video>.timeline.json ← bản dựng, người sửa được
     data/output/<ten-video>_automeme.mp4     ← video hoàn chỉnh
 """
@@ -29,6 +30,7 @@ class VideoPaths:
     audio: Path
     transcript_cache: Path
     transcript: Path
+    analysis: Path
     timeline: Path
     output: Path
 
@@ -43,6 +45,7 @@ def paths_for(video: Path, settings: Settings) -> VideoPaths:
         audio=cache_dir / "audio.wav",
         transcript_cache=cache_dir / f"transcript-{asr_key(settings.whisper)}.json",
         transcript=data_dir / "transcripts" / f"{ten}.json",
+        analysis=data_dir / "analysis" / f"{ten}.json",
         timeline=data_dir / "timelines" / f"{ten}.timeline.json",
         output=data_dir / "output" / f"{ten}_automeme.mp4",
     )

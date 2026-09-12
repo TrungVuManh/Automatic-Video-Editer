@@ -29,8 +29,9 @@ Cập nhật checklist + nhật ký sau mỗi việc hoàn thành.
 Venv không được kích hoạt sẵn — gọi qua `.venv\Scripts\`:
 - Test: `.venv\Scripts\python -m pytest -q` · Lint: `.venv\Scripts\ruff check src tests`
 - Kiểm tra môi trường: `.venv\Scripts\automeme doctor`
+- Duyệt timeline: `.venv\Scripts\automeme review <video>`
 - Cài lại sau khi sửa `pyproject.toml`: `.venv\Scripts\python -m pip install -e ".[dev]"`
-- Mục tiêu MVP: `automeme run input.mp4 --profile funny` (chưa làm — xem lộ trình trong HANDOFF)
+- Chạy trọn pipeline MVP: `automeme run input.mp4 --profile funny`
 
 ## Lệnh tắt (skill) trong dự án
 - `/tiep-tuc` — làm hạng mục tiếp theo trong lộ trình

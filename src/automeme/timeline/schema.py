@@ -41,6 +41,8 @@ class MemeEvent(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     query: str | None = None
     reason: str | None = None
+    # Giao diện review giữ sự kiện bị từ chối để có thể hoàn tác; renderer chỉ lấy active_events.
+    status: Literal["pending", "accepted", "rejected"] = "pending"
 
     @property
     def end(self) -> float:
@@ -56,6 +58,9 @@ class Timeline(BaseModel):
 
     def sorted_events(self) -> list[MemeEvent]:
         return sorted(self.events, key=lambda e: (e.start, e.id))
+
+    def active_events(self) -> list[MemeEvent]:
+        return [event for event in self.sorted_events() if event.status != "rejected"]
 
 
 def parse_timeline(data: Any) -> Timeline:

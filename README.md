@@ -18,8 +18,10 @@ render trực tiếp.
 | Stage A | Khung dự án, cấu hình + profile, log, `automeme doctor` | ✅ |
 | Iteration 1 | `automeme transcribe` → `transcript.json` | ✅ |
 | Iteration 2 | `timeline.json` + render meme PNG/JPG/GIF | ✅ |
-| Iteration 3 | Ollama tìm khoảnh khắc → `analysis.json` | ⏳ |
-| Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ⏳ |
+| Iteration 3 | Ollama/Claude tìm khoảnh khắc → `analysis.json` | ✅ |
+| Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ✅ |
+| Stage F | Cache/invalidation + resume toàn pipeline | ✅ |
+| Stage G | Web UI local để duyệt timeline và render | ✅ |
 
 **Hướng dẫn chi tiết** (cài đặt từng bước, cấu hình, xử lý sự cố):
 [`docs/GUIDE.md`](docs/GUIDE.md). Đặc tả đầy đủ: [`docs/SPEC.md`](docs/SPEC.md). Tiến độ và các
@@ -31,7 +33,7 @@ quyết định đã chốt: [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 - Python 3.10+ (khuyên 3.11)
 - FFmpeg: `winget install Gyan.FFmpeg`
-- Ollama (cần từ Iteration 3): `winget install Ollama.Ollama`, rồi `ollama pull qwen3:8b`
+- Ollama: `winget install Ollama.Ollama`, rồi `ollama pull qwen3:8b`
 - Docker Desktop — chỉ cần nếu dùng Meme Search
 
 **2. Môi trường Python**
@@ -53,6 +55,8 @@ Nhận dạng giọng nói (cần cho `transcribe`): `python -m pip install -e "
 GPU NVIDIA — nhóm này kèm sẵn cuBLAS và cuDNN nên không phải cài CUDA Toolkit. Máy không có
 GPU: `python -m pip install -e ".[asr]"`.
 
+Phân tích bằng Ollama (cần cho `analyze`): `python -m pip install -e ".[llm]"`.
+
 **3. Kiểm tra**
 
 ```powershell
@@ -68,26 +72,40 @@ automeme --help
 automeme doctor                              # kiểm tra môi trường
 automeme transcribe data\input\video.mp4     # lời thoại + thời điểm từng từ
 automeme transcribe data\input\video.mp4 --force   # nhận dạng lại
+automeme analyze data\input\video.mp4        # transcript → analysis.json
+automeme analyze data\input\video.mp4 --force     # gọi LLM phân tích lại
+automeme run data\input\video.mp4 --profile funny # chạy trọn pipeline MVP
+automeme review data\input\video.mp4               # duyệt trên giao diện web local
 ```
 
 `transcribe` cần faster-whisper: `python -m pip install -e ".[asr-cuda]"` (máy không có GPU
 NVIDIA thì dùng `".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`). Lần chạy đầu tải model khoảng 3 GB.
 Kết quả ở `data/transcripts/<tên-video>.json`; chạy lại thì bỏ qua vì đã có cache.
 
-Chèn meme theo một `timeline.json` (tự viết tay, hoặc do bước `analyze` sinh ra ở Iteration 3):
+`analyze` cần transcript có sẵn và Ollama đang chạy với model đã tải. Kết quả ở
+`data/analysis/<tên-video>.json`; mọi output đều qua schema pydantic, JSON hỏng được thử lại
+một lần, rồi code áp ngưỡng confidence, cooldown, mật độ, duration và timing cuối câu.
+
+`run` tìm meme local theo metadata/tên file; nếu có token thì dùng Meme Search vector API và
+fallback về local khi dịch vụ lỗi. Sau đó lệnh sinh timeline, kiểm tra và render. Bạn vẫn có
+thể duyệt hoặc sửa timeline rồi render lại:
 
 ```powershell
 automeme inspect data\timelines\video.timeline.json --video data\input\video.mp4
+automeme review data\input\video.mp4
 automeme render data\input\video.mp4
 ```
+
+`review` chỉ mở trên `127.0.0.1`: phát video kèm meme preview, hiển thị transcript, cho
+Accept/Reject, thay meme trong thư viện, chỉnh thời điểm/vị trí/tỉ lệ và bấm Render. Sự kiện
+rejected vẫn nằm trong timeline để hoàn tác nhưng renderer sẽ bỏ qua.
 
 `inspect` in bảng sự kiện, báo lỗi chặn render (thiếu file meme, meme vượt quá thời lượng video,
 hai meme cùng vị trí trùng giờ) và cảnh báo mềm (meme quá dày, quá dài). `render` ghi ra
 `data/output/<tên-video>_automeme.mp4`, giữ nguyên tiếng gốc. Cách viết timeline: xem
 [`docs/GUIDE.md`](docs/GUIDE.md) mục 5.4.
 
-`analyze` và `run` đã có tên nhưng chưa làm — chạy sẽ báo lệnh đó thuộc iteration nào.
-Mục tiêu cuối MVP (SPEC §78):
+Lệnh chạy trọn MVP (SPEC §78):
 
 ```powershell
 automeme run input.mp4 --profile funny
@@ -117,12 +135,13 @@ gửi file này khi báo lỗi.
 ```
 configs/         default.yaml + profile
 prompts/         prompt gửi LLM (từ Iteration 3)
-src/automeme/    cli, config, doctor, pipeline, workspace, media/ (FFmpeg),
+src/automeme/    cli, config, doctor, pipeline, cache, workspace, media/ (FFmpeg),
                  transcription/ (faster-whisper), timeline/ (schema + kiểm tra),
-                 rendering/ (filtergraph), utils/
+                 analyzer/ (context + Ollama/Claude), memes/ (local/API + ranking),
+                 timeline/ (schema + builder), rendering/ (filtergraph), review/ (web UI), utils/
 tests/           pytest — không cần GPU hay Ollama; test FFmpeg tự bỏ qua nếu máy không có
-data/            input, temp, cache, transcripts, timelines, output, logs — không commit
-assets/          memes, gifs, sfx, fonts — người dùng tự thêm, không commit
+data/            input, cache, transcripts, analysis, timelines, output, logs — không commit
+assets/          media không commit; có `library.example.jsonl` làm mẫu metadata
 docs/            GUIDE.md (hướng dẫn), SPEC.md (đặc tả gốc), HANDOFF.md (tiến độ, quyết định)
 legacy/          code cũ stream-auto-editor (cắt highlight stream game) — không bảo trì
 ```

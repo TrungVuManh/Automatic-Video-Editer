@@ -20,14 +20,25 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 
 ---
 
-## 2. Hiện trạng — Stage A + Iteration 1 (transcribe) + Iteration 2 (timeline, render)
+## 2. Hiện trạng — Stage A–G hoàn thành ở cấp code
 
 ### Module
 
 | File | Vai trò | Ghi chú |
 |---|---|---|
-| `src/automeme/cli.py` | CLI Typer | `doctor`, `transcribe`, `inspect`, `render` chạy được; `analyze/run` còn là khung. `bootstrap(profile)` nạp cấu hình + bật file log cho mọi lệnh thật |
-| `src/automeme/pipeline.py` | Nối các bước | `transcribe_video(...)` (nhận `transcriber` để test không cần GPU) và `render_timeline(video, settings, *, timeline_path, output, force)` |
+| `src/automeme/cli.py` | CLI Typer | `doctor`, `transcribe`, `analyze`, `inspect`, `render`, `run` chạy được. `bootstrap(profile)` nạp cấu hình + bật file log cho mọi lệnh thật |
+| `src/automeme/pipeline.py` | Nối các bước | `transcribe_video(...)`, `analyze_video(...)`, `build_video_timeline(...)`, `render_timeline(...)`, `run_video(...)`; các backend đều tiêm được để test offline |
+| `src/automeme/cache.py` | Cache/invalidation | Manifest strict, hash ổn định, nhận biết fresh/stale/file bị sửa; manifest nằm ngoài artifact người dùng chỉnh |
+| `src/automeme/analyzer/context.py` | Context window | `build_context_windows`: mặc định 2 đoạn trước + 1 đoạn sau, cấu hình được |
+| `src/automeme/analyzer/schema.py` | Structured output | `MemeTiming`, `MemeOpportunity`, `Analysis`, load/save và tóm tắt; mọi model `extra="forbid"` |
+| `src/automeme/analyzer/llm.py` | Adapter LLM | Interface `StructuredLLM`; `OllamaLLM` dùng JSON Schema + `think=False`; `ClaudeLLM` dùng structured output |
+| `src/automeme/analyzer/detector.py` | Phân tích + bộ lọc | JSON sai thử lại 1 lần rồi bỏ riêng câu; code quyết định confidence, timing, duration, cooldown, mật độ |
+| `src/automeme/analyzer/prompt.py` | Prompt manager | Nạp `prompts/meme_detector.txt`, điền context và JSON Schema, giữ UTF-8 |
+| `src/automeme/memes/local.py` | Thư viện local | Đọc `library.jsonl` theo từng dòng, tìm theo metadata/tên file, tự quét media và bỏ asset `safe=false` |
+| `src/automeme/memes/meme_search.py` | Meme Search API v1 | Vector search qua HTTP, bearer token, fallback local; chỉ tải ứng viên đã chọn vào cache bằng file tạm |
+| `src/automeme/memes/ranker.py` | Xếp hạng | Hàm thuần kết hợp semantic, emotion, style, quality, novelty và phạt meme vừa dùng |
+| `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video |
+| `src/automeme/review/` | Web UI local | Preview video/meme/transcript; accept/reject/replace/chỉnh timing; API loopback có token; nút render |
 | `src/automeme/timeline/schema.py` | Định dạng timeline | pydantic `Timeline`/`MemeEvent` (`extra="forbid"`), `load/save_timeline`, lỗi chỉ rõ "sự kiện #n → khóa" |
 | `src/automeme/timeline/validator.py` | Ràng buộc cứng (SPEC §54) | `validate_timeline` → (lỗi chặn render, cảnh báo); `resolve_asset`; `format_timeline_table` cho lệnh inspect |
 | `src/automeme/rendering/filters.py` | Dựng filtergraph | `build_render_plan` (hàm thuần) → tham số `-i` + `filter_complex`; `vi_tri_overlay`, `input_cho_meme` |
@@ -51,7 +62,10 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 data/input/<video>                              video người dùng chép vào
 data/cache/<ten-video>-<hash8>/audio.wav        WAV mono 16 kHz
 data/cache/<ten-video>-<hash8>/transcript-<asr8>.json   cache theo tham số ASR
+data/cache/meme-search/<id>.<ext>              media đã chọn và tải từ Meme Search
+data/cache/manifests/<stage>-<hash>.json       cache key + vân tay output, không chứa token
 data/transcripts/<ten-video>.json               bản mới nhất — các bước sau đọc file này
+data/analysis/<ten-video>.json                  cơ hội meme đã qua schema + bộ lọc cứng
 data/timelines/<ten-video>.timeline.json       bản dựng: meme nào, lúc nào, ở đâu (người sửa được)
 data/output/<ten-video>_automeme.mp4           video hoàn chỉnh
 ```
@@ -62,8 +76,13 @@ không dùng nhầm bản cũ. `--force` bắt chạy lại.
 
 Schema transcript: `{video, language, duration, model, segments[{id,start,end,text}], words[{w,start,end}]}`.
 
+Schema analysis: `{version, video, backend, model, opportunities[MemeOpportunity]}`; mỗi
+`MemeOpportunity` theo SPEC §24. Timing lưu trong file đã được code chuẩn hóa, không dùng thẳng
+anchor/delay do LLM đề xuất.
+
 Schema timeline (SPEC §34): `{version, video, events[{id, type:"meme", start, duration, asset,
-mode:"overlay", position?, scale?, confidence?, query?, reason?}]}`. Bỏ trống `position`/`scale`
+mode:"overlay", position?, scale?, status, confidence?, query?, reason?}]}`. `status` là
+`pending|accepted|rejected`; renderer bỏ qua rejected. Bỏ trống `position`/`scale`
 thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đường dẫn `asset` tương
 đối được hiểu từ thư mục gốc dự án, rồi thử tiếp từ `assets/`.
 
@@ -80,6 +99,12 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Schema + kiểm tra timeline | Xong | 25 test, thông báo lỗi chỉ rõ "sự kiện #n → khóa" |
 | `automeme inspect` | Xong | Chạy thật, cảnh báo đúng cooldown và mật độ |
 | `automeme render` (ảnh, GIF, vùng trong suốt) | Xong | Chạy thật; trích khung hình kiểm tra meme hiện đúng lúc, đúng góc; giữ nguyên tiếng gốc |
+| `automeme analyze` (Ollama/Claude) | Xong | 18 test mới chạy offline: schema, context, retry, bộ lọc, resume, CLI và adapter |
+| Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
+| Xếp hạng + dựng timeline | Xong | Test trọng số, novelty/phạt trùng, fallback ứng viên và giới hạn cuối video |
+| `automeme run` | Xong | Test toàn luồng với backend AI giả và FFmpeg thật: video → transcript → analysis → timeline → MP4 |
+| Cache/invalidation toàn pipeline | Xong | Analysis, timeline và render có input key riêng; đổi config làm mới đúng bước, timeline/output sửa ngoài được bảo vệ |
+| `automeme review` | Xong | Test service + HTTP server thật: auth, media Range, chỉnh timeline và render callback |
 
 ### Chưa làm được
 
@@ -88,11 +113,10 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Chất lượng nhận dạng **tiếng Việt** | Chưa có video tiếng Việt thật để đo. Windows của người dùng không có giọng đọc tiếng Việt nên mẫu thử phải dùng giọng tiếng Anh |
 | Tốc độ trên video dài (vài phút trở lên) | Mới thử video 11,7 giây |
 | Đường chạy CPU (`WHISPER_DEVICE=cpu`) | Chưa thử; máy có GPU nên mặc định chạy GPU |
-| Meme là video `.webm`/`.mp4` | Code có nhánh `-stream_loop` nhưng chưa chạy thật |
-| `automeme analyze` (Ollama tìm khoảnh khắc) | Iteration 3. Máy chưa cài Ollama |
-| Tìm và xếp hạng meme, `automeme run` | Iteration 4 |
+| Chạy `automeme analyze` với model thật | Máy chưa cài ứng dụng Ollama/model `qwen3:8b`; code và SDK Python đã sẵn sàng |
+| Chạy trọn pipeline với Ollama + Meme Search thật | Máy chưa có ứng dụng/model Ollama và dịch vụ Meme Search chưa được khởi chạy; local provider vẫn dùng được |
+| Chất lượng kho meme local | Repo chỉ có một asset smoke-test; cần người dùng bổ sung metadata và media có quyền sử dụng |
 | Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
-| Giao diện duyệt | Stage G — sau cùng |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
 
 ### Cấu hình
@@ -103,7 +127,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **160 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **222 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -113,7 +137,7 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 - Windows 11. Python trên PATH là bản *embeddable* 3.13 (không có venv) → dự án dùng `.venv`
   dựng từ Python 3.11.9. **Venv không được kích hoạt sẵn**: gọi qua `.venv\Scripts\...`.
 - FFmpeg 9.0.1 (winget), GPU RTX 4060 Laptop **8 GB VRAM**, Docker, gh, git.
-- **Chưa có:** Ollama, faster-whisper, file `.env`.
+- **Đã có SDK Python:** `ollama==0.6.2`, `anthropic==1.4.0`. **Chưa có:** ứng dụng Ollama/model, file `.env`.
 - 8 GB VRAM đủ cho Whisper large-v3 *hoặc* qwen3:8b, không đủ nạp cả hai cùng lúc → phải giải
   phóng Whisper trước khi gọi Ollama (Ollama giữ model trong VRAM ~5 phút sau lần gọi cuối).
 
@@ -163,14 +187,24 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 3. **Không dùng pydantic-settings** (dù đã được đồng ý cài): tên biến SPEC §14 không theo quy
    ước lồng nhau của nó (`MEME_COOLDOWN` → `editing.cooldown`), nên dùng bảng `ENV_MAP` +
    python-dotenv (có sẵn).
-4. Bỏ `requests` (dùng `httpx` khi cần), `opencv-python`, `Pillow`, `orjson` — MVP chưa cần;
+4. Bỏ `requests`, `opencv-python`, `Pillow`, `orjson`; dùng `httpx` trực tiếp cho Meme Search.
    ffprobe đọc được kích thước ảnh/GIF.
 5. Bỏ `APP_ENV` — không có gì dùng.
 6. SPEC §33 và §50 lệch nhau về chaotic (8 hay 9 meme/phút) — theo §50 (9).
 7. Thêm `automeme doctor` và `data/logs/` (SPEC không có).
 8. `requirements.txt` chỉ chứa `-e .[dev]`; nguồn thật là `pyproject.toml`.
-9. Sắp tới: Ollama dùng structured output (`format=` JSON schema từ pydantic); kiểm tra lại
-   repo và API của Meme Search trước Iteration 4, làm `LocalMemeProvider` trước (SPEC §29).
+9. **2026-09-12 — Iteration 4:** API Meme Search v1 đã được kiểm tra theo tài liệu chính thức:
+   `GET /api/v1/search`, `mode=vector`, `limit` tối đa 20, bearer token cần `search:read` và
+   `media:read` để lấy `content_url`. Dịch vụ chỉ nên chạy loopback. Adapter chỉ ánh xạ trường
+   cần dùng, bỏ qua trường mới, chặn redirect/cross-origin và giới hạn dung lượng tải.
+10. **2026-09-12 — Iteration 3:** Ollama nhận `MemeOpportunity.model_json_schema()` qua
+    `format`, `temperature=0`, `think=False`; Claude nhận schema đã transform qua
+    `output_config.format`. JSON vẫn được pydantic kiểm tra lại. Timing cuối câu, duration,
+    confidence, cooldown và mật độ do code quyết định. Mục 9 đã được kiểm tra cho Ollama.
+11. **2026-09-12 — Stage F:** manifest cache nằm ở `data/cache/manifests/`, không đổi schema
+    public. Analysis key phụ thuộc video/transcript/prompt/LLM/bộ lọc; timeline key phụ thuộc
+    analysis/provider/thư viện/ranking; render key phụ thuộc video/timeline/assets/codec. Timeline
+    hoặc output bị sửa ngoài automeme được giữ lại, chỉ `--force` mới ghi đè.
 
 **2026-09-12 — Iteration 2:**
 
@@ -231,7 +265,7 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 - Test: chuỗi filter, validator; tích hợp với video 5 giây sinh bằng lavfi + PNG tự sinh (SPEC §57).
 - Xong khi: timeline viết tay chèn đúng PNG/JPG/GIF.
 
-### Iteration 3 — Phân tích bằng LLM (SPEC §18–24, §51–53)  ← TIẾP THEO
+### Iteration 3 — Phân tích bằng LLM (SPEC §18–24, §51–53)  ✅ XONG 2026-09-12
 
 - `analyzer/context.py` (cửa sổ: 2 đoạn trước, 1 đoạn sau — đưa vào config), `analyzer/llm.py`
   (`OllamaLLM`, `ClaudeLLM`), `prompts/meme_detector.txt` (SPEC §21), model `MemeOpportunity`
@@ -240,17 +274,36 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
   chế độ "thinking" — tắt khi cần JSON.
 - Test: context window, validate, bộ lọc, LLM giả lập trả JSON hỏng → thử lại → bỏ qua.
 
-### Iteration 4 — Tìm meme, xếp hạng, `automeme run` (SPEC §25–33, §43)
+- Đã triển khai đủ các mục trên. Output chính thức: `data/analysis/<slug>.json`; SDK Ollama là
+  extra `[llm]`. Chưa smoke test model thật vì máy chưa cài ứng dụng Ollama/qwen3:8b.
+
+### Iteration 4 — Tìm meme, xếp hạng, `automeme run` (SPEC §25–33, §43)  ✅ XONG 2026-09-12
 
 - `memes/base.py` (`MemeProvider`), `memes/local.py` (metadata SPEC §26, tìm theo tag/từ khóa),
   `memes/ranker.py` (trọng số SPEC §30 đưa vào config, phạt trùng SPEC §31),
   `timeline/builder.py` (thời điểm SPEC §52: cuối câu + 0.10–0.30 s), `pipeline.py`, lệnh `run`.
-- `memes/meme_search.py` (HTTP) sau khi xác minh API thật.
-- Xong khi: đạt định nghĩa MVP ở mục 1.
+- `memes/meme_search.py` dùng API v1 đã xác minh; local-first khi không có token và tự fallback
+  local khi dịch vụ lỗi. Media từ API chỉ tải sau khi ứng viên được chọn.
+- Đã đạt định nghĩa MVP ở cấp code và integration test; còn cần smoke-test chất lượng với video
+  tiếng Việt, Ollama và kho meme thật của người dùng.
 
-### Sau MVP
+### Stage F — Cache, resume và hardening  ✅ XONG 2026-09-12
 
-Stage F (cache, resume, xử lý lỗi, integration test), Stage G (giao diện duyệt) — SPEC §79.
+- Manifest cache strict, ghi nguyên tử; tự vô hiệu từng bước theo đúng đầu vào.
+- Giữ timeline người dùng chỉnh, không tự ghi đè output không còn khớp fingerprint.
+- Test đổi video/cấu hình/ranking/timeline, manifest hỏng và pipeline FFmpeg thật.
+
+### Stage G — Giao diện duyệt  ✅ XONG 2026-09-12
+
+- `automeme review <video>` mở web UI loopback, không cần framework/dependency mới.
+- Preview video + meme + transcript; accept/reject có thể hoàn tác; thay asset local; chỉnh
+  start/duration/position/scale; render trực tiếp.
+- API POST yêu cầu token phiên, không có CORS; media hỗ trợ Range để tua video.
+
+### Tiếp theo
+
+Chạy nghiệm thu bằng video tiếng Việt, Ollama và kho meme thật; kiểm tra thêm media meme dạng
+video. Sau đó mới mở rộng cutaway/SFX/caption hoặc scene understanding nếu cần.
 Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke → `CaptionEvent`),
 `layout.py` (khung dọc 9:16), `claude_api.py`.
 
@@ -282,33 +335,33 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] MP4 output
 
 **Stage D**
-- [ ] Ollama adapter
-- [ ] Prompt manager
-- [ ] Context windows
-- [ ] Meme opportunity detection
-- [ ] JSON validation
+- [x] Ollama adapter
+- [x] Prompt manager
+- [x] Context windows
+- [x] Meme opportunity detection
+- [x] JSON validation
 
 **Stage E**
-- [ ] Meme Search installation
-- [ ] Meme Search adapter
-- [ ] Semantic query
-- [ ] Top-K retrieval
-- [ ] Ranking
-- [ ] Duplicate penalty
+- [~] Meme Search installation — Docker có sẵn, dịch vụ chưa được clone/chạy trên máy
+- [x] Meme Search adapter
+- [x] Semantic query
+- [x] Top-K retrieval
+- [x] Ranking
+- [x] Duplicate penalty
 
 **Stage F**
-- [ ] Complete pipeline
-- [ ] Cache
-- [ ] Resume
-- [ ] Error handling
-- [ ] Integration tests
+- [x] Complete pipeline
+- [x] Cache
+- [x] Resume
+- [x] Error handling
+- [x] Integration tests
 
 **Stage G**
-- [ ] Preview UI
-- [ ] Accept/reject meme
-- [ ] Replace meme
-- [ ] Adjust timestamp
-- [ ] Render
+- [x] Preview UI
+- [x] Accept/reject meme
+- [x] Replace meme
+- [x] Adjust timestamp
+- [x] Render
 
 ---
 
@@ -316,8 +369,11 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 - Tạo `.env`: `Copy-Item .env.example .env` (chưa bắt buộc — thiếu thì dùng mặc định).
 - Chọn license cho code (MIT hoặc Apache-2.0) — chưa có file `LICENSE`.
-- Trước Iteration 3: cài Ollama, `ollama pull qwen3:8b`.
+- Để chạy `analyze` thật: cài Ollama, mở server, rồi `ollama pull qwen3:8b`.
 - Chuẩn bị 1–2 video tiếng Việt 30–90 giây để chạy thật từ Iteration 1.
+- Thêm meme có quyền sử dụng vào `assets/memes/` và tạo `assets/memes/library.jsonl` từ file mẫu.
+- Nếu muốn semantic search: clone/chạy Meme Search trên loopback và tạo token có scope
+  `search:read,media:read`; nếu không, pipeline tự dùng thư viện local.
 
 ---
 
@@ -325,6 +381,81 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-12 (phiên 6) — Stage G: review UI local (Codex)
+
+**Đã làm.** Thêm `automeme review`, studio web responsive để phát video kèm overlay preview,
+đọc transcript, accept/reject, thay asset, chỉnh timing/vị trí/tỉ lệ và render. Timeline có trường
+`status`; event rejected được giữ để hoàn tác nhưng không validate asset hay đưa vào renderer.
+
+**Quyết định.** Dùng HTTP server thư viện chuẩn, không thêm dependency. Chỉ bind `127.0.0.1`;
+POST cần token ngẫu nhiên của phiên, CSP chặt, không CORS. Asset thay thế phải thuộc thư viện;
+media endpoint hỗ trợ byte range để video tua được.
+
+**Đã kiểm chứng.** 210 → **222 test**; test service, auth HTTP, Range, chỉnh/lưu timeline,
+render callback, CLI, logic bỏ event rejected và render meme video MP4 thật đều xanh.
+`automeme review --help` đúng; Edge headless mở UI thật trên smoke-test, server trả 2 event/1
+asset. Request media bị trình duyệt hủy khi tua/đóng tab được xử lý im lặng, không in traceback.
+Root `automeme --help` cũng có regression test với console CP1252 để không vỡ tiếng Việt.
+
+**Còn tồn tại.** Cần nghiệm thu UX trên trình duyệt thật cùng video tiếng Việt/kho meme thật;
+máy vẫn chưa có Ollama server/model.
+
+### 2026-09-12 (phiên 5) — Stage F: cache/invalidation toàn pipeline (Codex)
+
+**Đã làm.** Thêm `cache.py` và manifest nội bộ cho analysis, timeline, render. Cache key bao phủ
+đầu vào và cấu hình thật sự ảnh hưởng từng bước; video cùng tên nhưng đổi nội dung không còn lặng
+lẽ dùng analysis cũ. Timeline chỉnh tay và output bị sửa ngoài automeme được nhận biết, giữ nguyên.
+
+**Quyết định.** Manifest nằm tập trung trong `data/cache/manifests/` thay vì sidecar cạnh output;
+chỉ lưu hash, tuyệt đối không lưu token Meme Search. Artifact do automeme tạo và chưa bị sửa sẽ
+tự làm mới khi stale; artifact người dùng đụng vào cần `--force` để ghi đè.
+
+**Đã kiểm chứng.** 200 → **210 test**; test cache thuần, invalidation theo config/video/ranking,
+bảo vệ timeline/output chỉnh tay và render FFmpeg thật đều xanh. Ruff và `git diff --check` sạch.
+
+**Việc tiếp theo:** Stage G — giao diện duyệt timeline.
+
+### 2026-09-12 (phiên 4) — Iteration 4: tìm meme, xếp hạng và pipeline MVP (Codex)
+
+**Đã làm.** Thêm interface/provider local, adapter Meme Search API v1 có fallback, schema metadata,
+hàm xếp hạng có phạt trùng, timeline builder và lệnh `automeme run`. Thêm cấu hình trọng số,
+`MEME_LIBRARY_FILE`, giới hạn tải, metadata mẫu và dependency `httpx`. 178 → **200 test**.
+
+**Quyết định.** Local provider luôn dùng được và là fallback khi API lỗi. API search dùng vector,
+top-K tối đa 20; chỉ ứng viên thắng mới được tải. URL media phải cùng origin, redirect bị chặn,
+dung lượng có trần và cache được ghi `.part` rồi đổi tên. Response API được ánh xạ qua các trường
+ổn định để server thêm field không làm vỡ client.
+
+**Đã kiểm chứng.** Toàn bộ test và Ruff sạch. Integration test chạy FFmpeg thật với video sinh
+tại chỗ, backend ASR/LLM/provider giả, rồi kiểm tra pipeline tạo transcript, analysis, timeline và
+MP4. Local provider tìm được asset `soc.png` trong workspace.
+
+**Còn tồn tại.** Chưa chạy Ollama/Meme Search thật vì máy chưa có server/model tương ứng; chưa có
+video tiếng Việt và kho meme đủ lớn để đánh giá chất lượng. Bước tiếp theo là chạy smoke-test thật,
+sau đó hoàn thiện cache invalidation Stage F.
+
+### 2026-09-12 (phiên 3) — Iteration 3: LLM meme detector (Codex)
+
+**Đã làm.** Thêm `analyzer/`: context window, schema pydantic, prompt manager, interface LLM,
+adapter Ollama/Claude và bộ lọc cứng. Hoàn thiện `analyze_video` + lệnh `automeme analyze`,
+output `data/analysis/<slug>.json`, `--profile`, `--force`; cài extra `[llm]` với
+`ollama==0.6.2`. 160 → **178 test**.
+
+**Quyết định.** Gọi từng context bằng JSON Schema; JSON sai thử lại đúng một lần rồi bỏ riêng
+câu. LLM chỉ đề xuất ngữ nghĩa. Code lấy `segment.end + analyzer.timing_delay`, kẹp duration,
+lọc threshold/cooldown/mật độ và bỏ cơ hội không còn đủ thời gian trước cuối video. Ưu tiên
+confidence cao khi hai cơ hội xung đột.
+
+**Đã kiểm chứng.** `178 passed`; Ruff sạch; chữ ký `ollama.Client.chat` bản 0.6.2 có đủ
+`format` và `think`. Test adapter giả lập kiểm tra schema được gửi đúng, không cần mạng/API key.
+
+**Còn tồn tại.** Máy chưa có ứng dụng Ollama và model `qwen3:8b`, nên chưa chạy model thật.
+Video smoke-test hiện có là tiếng Anh. Cần cài/mở Ollama rồi chạy `/chay-that` để đánh giá chất
+lượng prompt tiếng Việt.
+
+**Việc tiếp theo:** Iteration 4 — thư viện meme local, tìm kiếm/xếp hạng, dựng timeline và
+`automeme run`.
 
 ### 2026-09-12 (phiên 2) — Iteration 2: timeline + render meme (Claude Code)
 

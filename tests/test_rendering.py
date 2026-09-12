@@ -171,6 +171,35 @@ def test_meme_thuc_su_hien_dung_luc(du_an):
 
 
 @CAN_FFMPEG
+def test_render_meme_video_mp4_that(du_an):
+    tmp_path, video = du_an
+    meme_video = tmp_path / "assets" / "memes" / "reaction.mp4"
+    run_cmd([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-f", "lavfi", "-i", "color=c=blue:size=120x80:rate=25:duration=0.4",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(meme_video),
+    ])
+    settings = load_settings(env={"OUTPUT_PRESET": "ultrafast"}, root=tmp_path)
+    timeline_path = tmp_path / "video-meme.timeline.json"
+    save_timeline(timeline_path, Timeline(video=video.name, events=[
+        MemeEvent(
+            id="video-meme",
+            start=1.0,
+            duration=1.5,
+            asset="assets/memes/reaction.mp4",
+        ),
+    ]))
+    output = tmp_path / "video-meme-output.mp4"
+    out, _ = render_timeline(
+        video,
+        settings,
+        timeline_path=timeline_path,
+        output=output,
+    )
+    assert out.is_file() and probe(out).duration == pytest.approx(5.0, abs=0.2)
+
+
+@CAN_FFMPEG
 def test_render_lai_thi_bo_qua_tru_khi_force(du_an):
     tmp_path, video = du_an
     settings = load_settings(env={"OUTPUT_PRESET": "ultrafast"}, root=tmp_path)
@@ -183,6 +212,37 @@ def test_render_lai_thi_bo_qua_tru_khi_force(du_an):
     assert out.stat().st_mtime_ns == lan_dau
     render_timeline(video, settings, timeline_path=tmp_path / "tl.json", force=True)
     assert out.stat().st_mtime_ns != lan_dau
+
+
+@CAN_FFMPEG
+def test_render_tu_lam_lai_khi_timeline_doi(du_an):
+    tmp_path, video = du_an
+    settings = load_settings(env={"OUTPUT_PRESET": "ultrafast"}, root=tmp_path)
+    timeline_path = tmp_path / "tl.json"
+    timeline = Timeline(video=video.name, events=[
+        MemeEvent(id="e1", start=1.0, duration=1.0, asset="assets/memes/meme.png")])
+    save_timeline(timeline_path, timeline)
+    out, _ = render_timeline(video, settings, timeline_path=timeline_path)
+    before = out.stat().st_mtime_ns
+
+    timeline.events[0].reason = "đã duyệt bằng tay"
+    save_timeline(timeline_path, timeline)
+    render_timeline(video, settings, timeline_path=timeline_path)
+    assert out.stat().st_mtime_ns != before
+
+
+@CAN_FFMPEG
+def test_output_bi_sua_ngoai_automeme_khong_bi_ghi_de(du_an):
+    tmp_path, video = du_an
+    settings = load_settings(env={"OUTPUT_PRESET": "ultrafast"}, root=tmp_path)
+    timeline_path = tmp_path / "tl.json"
+    save_timeline(timeline_path, Timeline(video=video.name, events=[
+        MemeEvent(id="e1", start=1.0, duration=1.0, asset="assets/memes/meme.png")]))
+    out, _ = render_timeline(video, settings, timeline_path=timeline_path)
+
+    out.write_bytes(b"nguoi dung da thay output")
+    render_timeline(video, settings, timeline_path=timeline_path)
+    assert out.read_bytes() == b"nguoi dung da thay output"
 
 
 @CAN_FFMPEG

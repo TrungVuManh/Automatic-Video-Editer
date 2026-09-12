@@ -23,6 +23,11 @@ def test_default_yaml_hop_le_va_du_khoa():
     assert s.whisper.language == "vi"
     assert s.llm.backend == "ollama"
     assert s.ollama.model == "qwen3:8b"
+    assert s.analyzer.previous_segments == 2
+    assert s.analyzer.timing_delay == 0.15
+    assert s.meme_search.max_download_mb == 25
+    assert s.meme.library_file == (PROJECT_ROOT / "assets/memes/library.jsonl").resolve()
+    assert s.ranking.semantic_weight == 0.45
     assert s.editing.cooldown == 7.0
     assert s.meme.duration_max == 2.5
 
@@ -85,6 +90,16 @@ def test_gia_tri_sai_bao_ro_khoa_va_gia_tri():
 def test_duration_min_lon_hon_max_bi_bat():
     with pytest.raises(ConfigError, match="duration_min"):
         load_settings(env={"MEME_MIN_DURATION": "3", "MEME_MAX_DURATION": "1"})
+
+
+def test_tong_trong_so_ranking_phai_bang_mot():
+    with pytest.raises(ConfigError, match="tổng năm trọng số"):
+        load_settings(overrides={"ranking": {"semantic_weight": 0.5}}, env=NO_ENV)
+
+
+def test_top_k_tuan_theo_gioi_han_api():
+    with pytest.raises(ConfigError, match=r"meme_search\.top_k"):
+        load_settings(env={"MEME_SEARCH_TOP_K": "21"})
 
 
 def test_khoa_go_nham_bi_bat(tmp_path):

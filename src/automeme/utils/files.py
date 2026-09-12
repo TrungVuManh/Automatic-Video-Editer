@@ -12,7 +12,9 @@ PROMPTS_DIR = PROJECT_ROOT / "prompts"
 ENV_FILE = PROJECT_ROOT / ".env"
 
 # Các thư mục con của data/ (SPEC §12) + logs/
-DATA_SUBDIRS = ("input", "temp", "cache", "transcripts", "timelines", "output", "logs")
+DATA_SUBDIRS = (
+    "input", "temp", "cache", "transcripts", "analysis", "timelines", "output", "logs",
+)
 
 
 def resolve_path(path: str | Path, root: Path = PROJECT_ROOT) -> Path:

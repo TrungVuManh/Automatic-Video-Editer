@@ -34,10 +34,17 @@ ollama:
 claude:
   model: claude-sonnet-5
 
+analyzer:
+  previous_segments: 2       # số câu trước CURRENT trong context window (SPEC §18)
+  next_segments: 1           # số câu sau CURRENT
+  timing_delay: 0.15         # meme bắt đầu sau cuối câu 150 ms (SPEC §52)
+  max_tokens: 1024           # giới hạn output khi dùng Claude
+
 meme_search:
   base_url: http://127.0.0.1:3000
   token: ""
   top_k: 10
+  max_download_mb: 25       # chặn response bất thường trước khi ghi vào cache
 
 editing:
   max_memes_per_minute: 5
@@ -45,11 +52,21 @@ editing:
   threshold: 0.65            # bỏ cơ hội có confidence thấp hơn mức này
 
 meme:
+  library_file: assets/memes/library.jsonl
   duration_min: 0.8          # giây
   duration_max: 2.5
   scale_default: 0.30        # bề rộng meme = 30% bề rộng video (SPEC §38)
   position_default: bottom-right   # top-left | top-right | bottom-left | bottom-right | center
   margin_ratio: 0.03         # lề của meme, tính theo bề rộng video
+
+ranking:
+  semantic_weight: 0.45
+  emotion_weight: 0.20
+  style_weight: 0.10
+  quality_weight: 0.10
+  novelty_weight: 0.15
+  duplicate_penalty: 0.30
+  recent_window: 60          # giây — phạt nếu cùng meme vừa được dùng (SPEC §31)
 
 output:
   video_codec: libx264

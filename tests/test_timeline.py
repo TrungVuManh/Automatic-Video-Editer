@@ -84,6 +84,24 @@ def test_sap_xep_theo_thoi_gian():
     assert [e.id for e in tl.sorted_events()] == ["a", "b"]
 
 
+def test_rejected_event_duoc_luu_nhung_khong_render_hoac_validate_asset():
+    tl = _tl({
+        "id": "e1",
+        "start": 1,
+        "duration": 1,
+        "asset": "missing.png",
+        "status": "rejected",
+    })
+    assert tl.active_events() == []
+    errors, _ = validate_timeline(
+        tl,
+        video_duration=10,
+        asset_paths={},
+        ton_tai=lambda path: False,
+    )
+    assert errors == []
+
+
 # ------------------------------------------------------------------ validator
 @pytest.fixture
 def settings(tmp_path):

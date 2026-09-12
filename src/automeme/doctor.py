@@ -61,7 +61,7 @@ def check_environment(settings: Settings | None, config_error: str | None = None
     elif settings:
         rows.append(ollama_status(settings.ollama.host, settings.ollama.model))
 
-    for name, note in (("docker", "chỉ cần cho Meme Search (Iteration 4)"),
+    for name, note in (("docker", "chỉ cần khi dùng Meme Search"),
                        ("git", "quản lý phiên bản")):
         exe = which(name)
         rows.append((name, OK if exe else WARN, exe or f"không thấy — {note}"))
@@ -134,7 +134,7 @@ def parse_nvidia_smi(text: str) -> list[str]:
 
 
 def ollama_status(host: str, model: str, timeout: float = 2.0) -> Row:
-    """Ollama chạy chưa, đã tải model chưa. Cần từ Iteration 3 nên thiếu chỉ là cảnh báo."""
+    """Ollama chạy chưa, đã tải model chưa. Thiếu chỉ chặn lệnh `analyze` dùng local."""
     url = host.rstrip("/") + "/api/tags"
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
@@ -142,7 +142,7 @@ def ollama_status(host: str, model: str, timeout: float = 2.0) -> Row:
     except (urllib.error.URLError, OSError, ValueError):
         hint = ("đã cài nhưng chưa chạy — mở ứng dụng Ollama" if which("ollama")
                 else "chưa cài — winget install Ollama.Ollama")
-        return ("Ollama", WARN, f"không kết nối được {host} ({hint}); cần từ Iteration 3")
+        return ("Ollama", WARN, f"không kết nối được {host} ({hint}); cần cho `analyze`")
     if has_model(ollama_model_names(tags), model):
         return ("Ollama", OK, f"{host} — có model {model}")
     return ("Ollama", WARN, f"server chạy nhưng chưa có {model} — chạy: ollama pull {model}")

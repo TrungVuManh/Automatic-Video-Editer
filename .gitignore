@@ -23,6 +23,7 @@ data/*/*
 # Meme, GIF, SFX có thể dính bản quyền (SPEC §56) — người dùng tự thêm
 assets/memes/*
 !assets/memes/.gitkeep
+!assets/memes/library.example.jsonl
 assets/gifs/*
 !assets/gifs/.gitkeep
 assets/sfx/*

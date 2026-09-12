@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="automeme-token" content="__AUTOMEME_TOKEN__">
+  <title>automeme — Review timeline</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">LOCAL REVIEW STUDIO</p>
+      <h1>automeme</h1>
+    </div>
+    <div class="header-actions">
+      <span id="save-state" class="badge neutral">Đang tải…</span>
+      <button id="render-button" class="primary">Render video</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="workspace">
+      <div class="panel video-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">PREVIEW</p>
+            <h2 id="video-name">Video</h2>
+          </div>
+          <span id="event-count" class="badge"></span>
+        </div>
+        <div id="stage" class="stage">
+          <video id="video" controls preload="metadata"></video>
+          <img id="meme-preview" alt="Meme preview">
+          <video id="meme-video-preview" muted loop playsinline></video>
+        </div>
+        <div id="messages" class="messages" aria-live="polite"></div>
+      </div>
+
+      <div class="panel transcript-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">CONTEXT</p>
+            <h2>Transcript</h2>
+          </div>
+        </div>
+        <div id="transcript" class="transcript"></div>
+      </div>
+    </section>
+
+    <aside class="panel timeline-panel">
+      <div class="panel-heading sticky">
+        <div>
+          <p class="eyebrow">AI SUGGESTIONS</p>
+          <h2>Timeline</h2>
+        </div>
+        <button id="reload-button" class="ghost">Tải lại</button>
+      </div>
+      <div id="events" class="events"></div>
+    </aside>
+  </main>
+
+  <template id="event-template">
+    <article class="event-card">
+      <button class="event-summary" type="button">
+        <span class="event-index"></span>
+        <span class="event-time"></span>
+        <span class="event-status badge"></span>
+      </button>
+      <div class="event-body">
+        <div class="event-media"></div>
+        <p class="event-reason"></p>
+        <p class="event-query"></p>
+        <div class="field-grid">
+          <label>Bắt đầu (giây)<input class="start" type="number" min="0" step="0.05"></label>
+          <label>Thời lượng<input class="duration" type="number" min="0.05" step="0.05"></label>
+          <label>Vị trí<select class="position">
+            <option value="">Mặc định</option><option>top-left</option><option>top-right</option>
+            <option>bottom-left</option><option>bottom-right</option><option>center</option>
+          </select></label>
+          <label>Tỉ lệ<input class="scale" type="number" min="0.05" max="1" step="0.05"></label>
+        </div>
+        <label class="asset-field">Thay meme<select class="asset"></select></label>
+        <div class="event-actions">
+          <button class="accept primary" type="button">Accept</button>
+          <button class="save ghost" type="button">Lưu chỉnh sửa</button>
+          <button class="reject danger" type="button">Reject</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

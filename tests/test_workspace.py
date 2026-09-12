@@ -66,6 +66,7 @@ def test_paths_for(tmp_path, settings):
     assert paths.audio == paths.cache_dir / "audio.wav"
     assert paths.transcript_cache.name == f"transcript-{asr_key(settings.whisper)}.json"
     assert paths.transcript == settings.paths.data_dir / "transcripts" / "bua-tiec.json"
+    assert paths.analysis == settings.paths.data_dir / "analysis" / "bua-tiec.json"
 
 
 def test_doi_model_thi_doi_file_cache_nhung_giu_thu_muc(tmp_path):

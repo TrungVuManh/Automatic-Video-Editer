@@ -42,13 +42,16 @@ def validate_timeline(timeline: Timeline, *, video_duration: float | None,
     """`asset_paths` là {asset trong timeline → đường dẫn thật} (xem `resolve_asset`)."""
     loi: list[str] = []
     canh_bao: list[str] = []
-    events = timeline.sorted_events()
+    all_events = timeline.sorted_events()
+    events = timeline.active_events()
 
     ma_da_gap: set[str] = set()
-    for e in events:
+    for e in all_events:
         if e.id in ma_da_gap:
             loi.append(f"trùng mã sự kiện: {e.id}")
         ma_da_gap.add(e.id)
+
+    for e in events:
 
         if video_duration is not None and e.end > video_duration + DUNG_SAI:
             loi.append(f"{e.id}: kết thúc ở {format_ts(e.end)} nhưng video chỉ dài "
@@ -109,13 +112,16 @@ def format_timeline_table(timeline: Timeline, loi: list[str], canh_bao: list[str
                           video_duration: float | None = None) -> str:
     """Bảng cho lệnh `automeme inspect`."""
     events = timeline.sorted_events()
+    active_count = len(timeline.active_events())
     dai_video = f", video {format_ts(video_duration)}" if video_duration else ""
-    dong = ["", f"TIMELINE  {timeline.video}  ({len(events)} sự kiện{dai_video})"]
-    head = f"  {'mã':<12} {'bắt đầu':>9} {'dài':>6}  {'vị trí':<13} {'cỡ':>5}  asset"
+    dong = ["", f"TIMELINE  {timeline.video}  ({active_count} sự kiện bật / "
+            f"{len(events)} tổng{dai_video})"]
+    head = (f"  {'mã':<12} {'trạng thái':<10} {'bắt đầu':>9} {'dài':>6}  "
+            f"{'vị trí':<13} {'cỡ':>5}  asset")
     dong += [head, "  " + "-" * (len(head) - 2)]
     for e in events:
         co = f"{e.scale * 100:.0f}%" if e.scale is not None else "mặc"
-        dong.append(f"  {e.id:<12} {format_ts(e.start):>9} {e.duration:>6.2f}  "
+        dong.append(f"  {e.id:<12} {e.status:<10} {format_ts(e.start):>9} {e.duration:>6.2f}  "
                     f"{(e.position or 'mặc định'):<13} {co:>5}  {e.asset}")
     if not events:
         dong.append("  (chưa có sự kiện nào)")
