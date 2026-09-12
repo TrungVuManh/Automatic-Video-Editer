@@ -39,6 +39,7 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/memes/ranker.py` | Xếp hạng | Hàm thuần kết hợp semantic, emotion, style, quality, novelty và phạt meme vừa dùng |
 | `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video |
 | `src/automeme/review/` | Web UI local | Preview video/meme/transcript; accept/reject/replace/chỉnh timing; API loopback có token; nút render |
+| `src/automeme/studio/` | UI/UX đầy đủ | Dashboard, upload nguyên tử, job pipeline nền, editor waveform, transcript, render/download và CRUD metadata kho meme |
 | `src/automeme/timeline/schema.py` | Định dạng timeline | pydantic `Timeline`/`MemeEvent` (`extra="forbid"`), `load/save_timeline`, lỗi chỉ rõ "sự kiện #n → khóa" |
 | `src/automeme/timeline/validator.py` | Ràng buộc cứng (SPEC §54) | `validate_timeline` → (lỗi chặn render, cảnh báo); `resolve_asset`; `format_timeline_table` cho lệnh inspect |
 | `src/automeme/rendering/filters.py` | Dựng filtergraph | `build_render_plan` (hàm thuần) → tham số `-i` + `filter_complex`; `vi_tri_overlay`, `input_cho_meme` |
@@ -105,6 +106,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | `automeme run` | Xong | Test toàn luồng với backend AI giả và FFmpeg thật: video → transcript → analysis → timeline → MP4 |
 | Cache/invalidation toàn pipeline | Xong | Analysis, timeline và render có input key riêng; đổi config làm mới đúng bước, timeline/output sửa ngoài được bảo vệ |
 | `automeme review` | Xong | Test service + HTTP server thật: auth, media Range, chỉnh timeline và render callback |
+| `automeme studio` | Xong | Edge headless mở UI thật; test dashboard/upload/job/library/auth; frontend OSS vendoring chạy offline |
 
 ### Chưa làm được
 
@@ -127,7 +129,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **222 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **237 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -300,6 +302,16 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
   start/duration/position/scale; render trực tiếp.
 - API POST yêu cầu token phiên, không có CORS; media hỗ trợ Range để tua video.
 
+### AutoMeme Studio — UI/UX đầy đủ  ✅ XONG 2026-09-12
+
+- `automeme studio` mở app shell responsive gồm Tổng quan, Tạo video, Biên tập, Kho meme và
+  Thiết lập; vẫn giữ lệnh `review` cho luồng duyệt nhanh.
+- Upload video/meme ghi `.part` rồi đổi tên, chặn traversal/đuôi/dung lượng; pipeline chạy nền
+  một job GPU, báo tiến độ bốn stage và tận dụng cache hiện có.
+- Editor dùng Plyr + WaveSurfer Regions/Timeline; kho meme quản lý metadata strict. FilePond,
+  SortableJS và Lucide hoàn thiện upload, kéo-thả và icon. Toàn bộ vendor chạy offline.
+- Phiên bản/license nằm trong `THIRD_PARTY_NOTICES.md`; toàn văn license được đóng vào package.
+
 ### Tiếp theo
 
 Chạy nghiệm thu bằng video tiếng Việt, Ollama và kho meme thật; kiểm tra thêm media meme dạng
@@ -363,6 +375,13 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] Adjust timestamp
 - [x] Render
 
+**Studio UI/UX**
+- [x] Dashboard dự án và môi trường
+- [x] Kéo-thả video + tiến trình pipeline
+- [x] Editor video/waveform/transcript
+- [x] Quản lý kho meme và metadata
+- [x] Vendor OSS offline + third-party notices
+
 ---
 
 ## 7. Việc người dùng cần tự làm
@@ -381,6 +400,21 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-12 (phiên 7) — AutoMeme Studio UI/UX (Codex)
+
+**Đã làm.** Thêm lệnh `automeme studio` và giao diện responsive đầy đủ cho người không muốn
+dùng CLI: dashboard, upload video, chọn profile, tiến trình pipeline, editor waveform +
+transcript, render/download và kho meme có metadata editor. `run_video` có callback tiến độ
+không phá API cũ.
+
+**Mã nguồn mở.** Vendor offline Plyr 3.8.4 (MIT), WaveSurfer.js 7.12.12 (BSD-3-Clause),
+SortableJS 1.15.7 (MIT), Lucide 1.45.0 (ISC), FilePond 4.32.12 (MIT). Node chỉ là build-time;
+Python runtime không thêm dependency. Có script build, lockfile, notices và toàn văn license.
+
+**An toàn và kiểm chứng.** Studio chỉ bind loopback, token + cookie SameSite, CSP, media Range;
+upload atomic, giới hạn loại/dung lượng và không ghi đè. Ruff sạch, **237 test** xanh, npm audit
+0 lỗ hổng; Edge headless 1440×1000 tải dashboard thật với project smoke-test và asset local.
 
 ### 2026-09-12 (phiên 6) — Stage G: review UI local (Codex)
 

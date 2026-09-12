@@ -330,6 +330,30 @@ def test_run_video_noi_dung_thu_tu_cac_buoc(monkeypatch, video_gia, settings, tm
     assert output == tmp_path / "out.mp4" and result is timeline
 
 
+def test_run_video_bao_tien_do_tung_buoc(monkeypatch, video_gia, settings, tmp_path):
+    timeline = Timeline(video=video_gia.name)
+    monkeypatch.setattr("automeme.pipeline.transcribe_video", lambda *a, **kw: None)
+    monkeypatch.setattr("automeme.pipeline.analyze_video", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "automeme.pipeline.build_video_timeline",
+        lambda *a, **kw: (tmp_path / "tl.json", timeline),
+    )
+    monkeypatch.setattr(
+        "automeme.pipeline.render_timeline",
+        lambda *a, **kw: (tmp_path / "out.mp4", timeline),
+    )
+    progress = []
+    run_video(video_gia, settings, progress_callback=lambda stage, status: progress.append(
+        (stage, status)
+    ))
+    assert progress == [
+        ("transcribe", "running"), ("transcribe", "completed"),
+        ("analyze", "running"), ("analyze", "completed"),
+        ("timeline", "running"), ("timeline", "completed"),
+        ("render", "running"), ("render", "completed"),
+    ]
+
+
 @pytest.mark.skipif(not (which("ffmpeg") and which("ffprobe")), reason="cần FFmpeg")
 def test_run_video_tich_hop_that_voi_backend_gia(tmp_path):
     """Video thật qua đủ pipeline; chỉ Whisper, LLM và tìm kiếm được giả lập."""

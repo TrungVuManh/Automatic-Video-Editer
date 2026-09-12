@@ -10,6 +10,9 @@ __pycache__/
 build/
 dist/
 
+# Frontend (bản build cần phân phối nằm trong src/automeme/studio/static/vendor/)
+node_modules/
+
 # Test / lint
 .pytest_cache/
 .ruff_cache/

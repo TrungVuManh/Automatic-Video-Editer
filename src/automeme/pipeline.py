@@ -5,6 +5,7 @@ nếu output đã tồn tại, nên chạy lại từ giữa chừng được (S
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -211,18 +212,30 @@ def build_video_timeline(video: Path, settings: Settings, *, force: bool = False
 def run_video(video: Path, settings: Settings, *, force: bool = False,
               output: Path | None = None, transcriber: Transcriber | None = None,
               llm: StructuredLLM | None = None,
-              provider: MemeProvider | None = None) -> tuple[Path, Timeline]:
+              provider: MemeProvider | None = None,
+              progress_callback: Callable[[str, str], None] | None = None,
+              ) -> tuple[Path, Timeline]:
     """Chạy trọn MVP: transcribe → analyze → timeline → render."""
+    progress = progress_callback or (lambda _stage, _state: None)
+    progress("transcribe", "running")
     transcribe_video(video, settings, force=force, transcriber=transcriber)
+    progress("transcribe", "completed")
+    progress("analyze", "running")
     analyze_video(video, settings, force=force, llm=llm)
+    progress("analyze", "completed")
+    progress("timeline", "running")
     timeline_path, _ = build_video_timeline(video, settings, force=force, provider=provider)
-    return render_timeline(
+    progress("timeline", "completed")
+    progress("render", "running")
+    result = render_timeline(
         video,
         settings,
         timeline_path=timeline_path,
         output=output,
         force=force,
     )
+    progress("render", "completed")
+    return result
 
 
 def render_timeline(video: Path, settings: Settings, *, timeline_path: Path | None = None,

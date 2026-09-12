@@ -45,6 +45,7 @@ lặp, sai thời điểm); bạn **duyệt `timeline.json`** trước khi rende
 | `automeme analyze` | Transcript → khoảnh khắc nên chèn meme | ✅ dùng được |
 | `automeme run` | Trọn quy trình bằng một lệnh | ✅ dùng được |
 | `automeme review` | Duyệt timeline bằng giao diện web local | ✅ dùng được |
+| `automeme studio` | Giao diện đầy đủ: nhập video → chạy AI → biên tập → tải output | ✅ dùng được |
 
 ---
 
@@ -463,9 +464,32 @@ TIMELINE  smoke-test.mp4  (2 sự kiện bật / 2 tổng, video 00:11.68)
 meme cùng vị trí mà trùng thời gian. **Cảnh báo** (vẫn render): meme dày hơn cooldown, vượt số
 meme mỗi phút, thời lượng ngoài khoảng trong cấu hình — timeline viết tay là quyền của bạn.
 
-### 5.5 Duyệt bằng giao diện local
+### 5.5 Làm toàn bộ bằng AutoMeme Studio
 
-Sau khi có timeline, mở studio review:
+Cách dễ nhất là mở Studio từ thư mục dự án:
+
+```powershell
+automeme studio
+automeme studio --profile funny --port 8765
+automeme studio --no-browser --port 0   # tự mở URL được in trong log
+```
+
+Trong Studio:
+
+1. **Tổng quan** hiển thị dự án gần đây và tình trạng Python/FFmpeg/GPU/Ollama.
+2. **Tạo video** nhận file kéo-thả, cho chọn profile và theo dõi bốn bước pipeline. Mỗi lần chỉ
+   có một job GPU; lỗi ở giữa có thể chạy lại và các artifact còn mới được lấy từ cache.
+3. **Biên tập** phát video, đồng bộ transcript và waveform; kéo vùng meme để đổi thời gian,
+   Accept/Reject, thay asset/vị trí/tỉ lệ rồi render lại.
+4. **Kho meme** nhận ảnh/GIF/video và chỉnh tag, cảm xúc, phong cách, cường độ, chất lượng,
+   cờ an toàn. File upload được ghi nguyên tử và giới hạn theo loại.
+
+Studio chỉ bind vào `127.0.0.1`, dùng token ngẫu nhiên cho request thay đổi dữ liệu và không
+public ra LAN/Internet. Các thư viện giao diện đã được đóng gói trong ứng dụng nên chạy offline.
+
+### 5.6 Duyệt nhanh một timeline
+
+Khi chỉ muốn mở thẳng một video đã có timeline, dùng giao diện review gọn:
 
 ```powershell
 automeme review data\input\video.mp4
@@ -546,7 +570,7 @@ cùng meme trong vòng 60 giây bị trừ thêm 0,30 điểm.
 | `Timeline không hợp lệ: không thấy file meme` | Sai đường dẫn `asset` | Đường dẫn tính từ thư mục gốc dự án (`assets/memes/x.png`) hoặc từ `assets/` (`memes/x.png`) |
 | `Chưa có timeline ...` khi dùng `render` | Chưa viết hoặc chưa sinh file timeline | Chạy `automeme run <video>` để sinh tự động, hoặc viết theo mẫu ở [5.4](#54-timeline-viết-tay-và-duyệt) |
 | Output *đã bị sửa ngoài automeme* | File đích khác bản automeme đã ghi | Chọn `--out` khác để giữ cả hai, hoặc thêm `--force` nếu muốn ghi đè |
-| Port 8765 đang được dùng | Một ứng dụng khác đang nghe trên port đó | Chạy `automeme review <video> --port 0` để tự chọn port trống |
+| Port 8765 đang được dùng | Một ứng dụng khác đang nghe trên port đó | Chạy `automeme studio --port 0` hoặc `automeme review <video> --port 0` để tự chọn port trống |
 | Render xong nhưng không thấy meme đâu | Thời điểm nằm ngoài đoạn đang xem, hoặc meme trùng màu nền | Trích thử khung hình: `ffmpeg -ss <giây> -i <video ra> -frames:v 1 thu.png` |
 | Log báo *Không copy được audio gốc* | Định dạng tiếng gốc không nhét được vào MP4 | Không sao — automeme tự encode lại bằng `AUDIO_CODEC` |
 
@@ -580,7 +604,7 @@ khi HANDOFF và SPEC mâu thuẫn, HANDOFF thắng.
 ## 9. Dành cho người phát triển
 
 ```powershell
-pytest -q                     # 222 test, không cần GPU/Ollama; test FFmpeg tự bỏ qua nếu máy thiếu
+pytest -q                     # 237 test, không cần GPU/Ollama; test FFmpeg tự bỏ qua nếu máy thiếu
 pytest --cov=automeme         # kèm độ phủ code
 ruff check src tests          # lint
 ruff check --fix src tests    # tự sửa lỗi dễ (sắp xếp import…)
@@ -601,8 +625,13 @@ src/automeme/
 ├── timeline/     schema + builder + validator
 ├── rendering/    filters.py (dựng filtergraph, hàm thuần) + renderer.py (gọi FFmpeg)
 ├── review/       web UI loopback + API chỉnh timeline có token phiên
+├── studio/       dashboard + upload/job + editor waveform + kho meme
 └── utils/        đường dẫn, JSON, thời gian, log
 ```
+
+Frontend Studio dùng dependency npm **chỉ lúc build**. Bản phân phối đã chứa vendor offline;
+muốn cập nhật/dựng lại thì chạy `npm install` và `npm run build:studio`, sau đó kiểm tra
+`THIRD_PARTY_NOTICES.md` cùng các license trong `studio/static/vendor/licenses/`.
 
 **Quy tắc chính** (đầy đủ trong `CLAUDE.md`): logic là hàm thuần có test; FFmpeg chỉ gọi qua
 `automeme.media`, lệnh dạng list; import thư viện nặng bên trong hàm; output của LLM luôn qua

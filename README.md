@@ -22,6 +22,7 @@ render trực tiếp.
 | Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ✅ |
 | Stage F | Cache/invalidation + resume toàn pipeline | ✅ |
 | Stage G | Web UI local để duyệt timeline và render | ✅ |
+| Studio UI | Dashboard, upload, pipeline, editor và kho meme trong một giao diện | ✅ |
 
 **Hướng dẫn chi tiết** (cài đặt từng bước, cấu hình, xử lý sự cố):
 [`docs/GUIDE.md`](docs/GUIDE.md). Đặc tả đầy đủ: [`docs/SPEC.md`](docs/SPEC.md). Tiến độ và các
@@ -76,7 +77,26 @@ automeme analyze data\input\video.mp4        # transcript → analysis.json
 automeme analyze data\input\video.mp4 --force     # gọi LLM phân tích lại
 automeme run data\input\video.mp4 --profile funny # chạy trọn pipeline MVP
 automeme review data\input\video.mp4               # duyệt trên giao diện web local
+automeme studio                                     # mở giao diện đầy đủ (khuyên dùng)
 ```
+
+### Dùng giao diện AutoMeme Studio
+
+```powershell
+automeme studio
+automeme studio --profile funny --port 8765
+automeme studio --no-browser --port 0
+```
+
+Studio mở trong trình duyệt và gom toàn bộ quy trình vào một nơi: kéo-thả video, chọn profile,
+theo dõi từng bước AI, tiếp tục từ cache, duyệt/chỉnh meme trên waveform, đọc transcript,
+render/tải output và quản lý metadata kho meme. Server chỉ bind `127.0.0.1`, có token phiên và
+không cần Internet để tải giao diện.
+
+Frontend tận dụng các dự án mã nguồn mở đã vendoring để chạy offline: Plyr, WaveSurfer.js,
+SortableJS, Lucide và FilePond. Phiên bản, nguồn và giấy phép xem
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Node/npm chỉ cần khi người phát triển muốn
+dựng lại vendor bằng `npm install && npm run build:studio`; người dùng ứng dụng không cần Node.
 
 `transcribe` cần faster-whisper: `python -m pip install -e ".[asr-cuda]"` (máy không có GPU
 NVIDIA thì dùng `".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`). Lần chạy đầu tải model khoảng 3 GB.
@@ -138,7 +158,8 @@ prompts/         prompt gửi LLM (từ Iteration 3)
 src/automeme/    cli, config, doctor, pipeline, cache, workspace, media/ (FFmpeg),
                  transcription/ (faster-whisper), timeline/ (schema + kiểm tra),
                  analyzer/ (context + Ollama/Claude), memes/ (local/API + ranking),
-                 timeline/ (schema + builder), rendering/ (filtergraph), review/ (web UI), utils/
+                 timeline/ (schema + builder), rendering/ (filtergraph), review/ (quick review),
+                 studio/ (dashboard + editor + asset library), utils/
 tests/           pytest — không cần GPU hay Ollama; test FFmpeg tự bỏ qua nếu máy không có
 data/            input, cache, transcripts, analysis, timelines, output, logs — không commit
 assets/          media không commit; có `library.example.jsonl` làm mẫu metadata

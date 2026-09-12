@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0c10">
+  <meta name="automeme-token" content="__AUTOMEME_TOKEN__">
+  <title>AutoMeme Studio</title>
+  <link rel="stylesheet" href="/assets/vendor/plyr.css">
+  <link rel="stylesheet" href="/assets/vendor/filepond.min.css">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script defer src="/assets/vendor/plyr.min.js"></script>
+  <script defer src="/assets/vendor/filepond.min.js"></script>
+  <script defer src="/assets/vendor/sortable.min.js"></script>
+  <script defer src="/assets/vendor/lucide.min.js"></script>
+  <script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#home" aria-label="AutoMeme Studio">
+        <span class="brand-mark"><i data-lucide="clapperboard"></i></span>
+        <span><strong>AutoMeme</strong><small>STUDIO</small></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <button class="nav-item active" data-view="home"><i data-lucide="layout-dashboard"></i><span>Tổng quan</span></button>
+        <button class="nav-item" data-view="create"><i data-lucide="sparkles"></i><span>Tạo video</span></button>
+        <button class="nav-item" data-view="editor"><i data-lucide="panels-top-left"></i><span>Biên tập</span></button>
+        <button class="nav-item" data-view="library"><i data-lucide="images"></i><span>Kho meme</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button class="nav-item" data-view="settings"><i data-lucide="settings-2"></i><span>Thiết lập</span></button>
+        <div class="local-badge"><span class="status-dot"></span><span><strong>Local & riêng tư</strong><small>Dữ liệu ở trên máy bạn</small></span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" id="mobile-menu" aria-label="Mở menu"><i data-lucide="menu"></i></button>
+        <div class="breadcrumbs"><span>AutoMeme Studio</span><i data-lucide="chevron-right"></i><strong id="page-name">Tổng quan</strong></div>
+        <div class="top-actions">
+          <span class="system-pill" id="system-pill"><span class="status-dot"></span><span>Đang kiểm tra hệ thống</span></span>
+          <button class="icon-button" id="refresh-button" aria-label="Làm mới"><i data-lucide="refresh-cw"></i></button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <section class="view active" id="view-home">
+          <div class="hero panel">
+            <div class="hero-copy">
+              <span class="eyebrow"><i data-lucide="wand-sparkles"></i> AI VIDEO WORKFLOW</span>
+              <h1>Biến video thành nội dung<br><em>đúng meme, đúng lúc.</em></h1>
+              <p>Nhập video, để AI tìm khoảnh khắc và duyệt bản dựng ngay trên một màn hình.</p>
+              <div class="hero-actions">
+                <button class="button primary" data-go="create"><i data-lucide="plus"></i>Tạo video mới</button>
+                <button class="button ghost" data-go="library"><i data-lucide="images"></i>Mở kho meme</button>
+              </div>
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+              <div class="orb orb-one"></div><div class="orb orb-two"></div>
+              <div class="mini-timeline"><span></span><span></span><b></b><span></span><i></i><span></span></div>
+              <div class="floating-card card-one"><i data-lucide="message-circle-more"></i><span>Phát hiện punchline<strong>00:18.4</strong></span></div>
+              <div class="floating-card card-two"><i data-lucide="badge-check"></i><span>Meme phù hợp<strong>94% match</strong></span></div>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card"><span class="stat-icon violet"><i data-lucide="film"></i></span><div><small>Dự án</small><strong id="stat-projects">—</strong><span>trong workspace</span></div></article>
+            <article class="stat-card"><span class="stat-icon mint"><i data-lucide="images"></i></span><div><small>Kho meme</small><strong id="stat-assets">—</strong><span>asset sẵn sàng</span></div></article>
+            <article class="stat-card"><span class="stat-icon amber"><i data-lucide="cpu"></i></span><div><small>Pipeline</small><strong id="stat-system">—</strong><span id="stat-system-note">đang kiểm tra</span></div></article>
+          </div>
+
+          <div class="section-heading"><div><span class="eyebrow">WORKSPACE</span><h2>Dự án gần đây</h2></div><button class="text-button" data-go="create">Tạo dự án <i data-lucide="arrow-right"></i></button></div>
+          <div class="project-grid" id="recent-projects"><div class="empty-state compact"><span class="spinner"></span><p>Đang tải dự án…</p></div></div>
+        </section>
+
+        <section class="view" id="view-create">
+          <div class="page-heading"><div><span class="eyebrow">NEW PROJECT</span><h1>Tạo video mới</h1><p>Ba bước từ video thô tới bản dựng có thể duyệt.</p></div></div>
+          <div class="create-layout">
+            <div class="create-main panel">
+              <div class="step-label"><span>01</span><div><strong>Chọn video nguồn</strong><small>MP4, MOV, MKV hoặc WebM · tối đa 10 GB</small></div></div>
+              <input type="file" id="video-upload" name="video" accept="video/mp4,video/quicktime,video/x-matroska,video/webm">
+              <div class="selected-project hidden" id="selected-project">
+                <span class="file-icon"><i data-lucide="file-video-2"></i></span>
+                <div><strong id="selected-name"></strong><small id="selected-meta"></small></div>
+                <i data-lucide="circle-check-big" class="success-icon"></i>
+              </div>
+              <div class="divider"></div>
+              <div class="step-label"><span>02</span><div><strong>Chọn phong cách</strong><small>Điều chỉnh độ dày và nhịp xuất hiện của meme</small></div></div>
+              <div class="profile-cards" id="profile-cards"></div>
+              <div class="divider"></div>
+              <div class="step-label"><span>03</span><div><strong>Chạy AutoMeme</strong><small>Pipeline sẽ tận dụng cache và có thể tiếp tục khi lỗi</small></div></div>
+              <label class="toggle-row"><span><strong>Làm mới toàn bộ</strong><small>Bỏ qua cache cũ của dự án này</small></span><input type="checkbox" id="force-run"><span class="toggle"></span></label>
+              <button class="button primary wide" id="start-job"><i data-lucide="sparkles"></i>Bắt đầu xử lý</button>
+            </div>
+            <aside class="job-panel panel" id="job-panel">
+              <div class="job-header"><span class="job-art"><i data-lucide="workflow"></i></span><div><small>PIPELINE STATUS</small><h3 id="job-title">Sẵn sàng bắt đầu</h3></div></div>
+              <div class="pipeline-steps" id="pipeline-steps">
+                <div data-stage="transcribe"><span><i data-lucide="audio-lines"></i></span><div><strong>Nhận dạng lời thoại</strong><small>Whisper · giữ timestamp</small></div><b></b></div>
+                <div data-stage="analyze"><span><i data-lucide="brain-circuit"></i></span><div><strong>Phân tích khoảnh khắc</strong><small>AI · structured output</small></div><b></b></div>
+                <div data-stage="timeline"><span><i data-lucide="gallery-horizontal-end"></i></span><div><strong>Chọn meme</strong><small>Semantic ranking</small></div><b></b></div>
+                <div data-stage="render"><span><i data-lucide="clapperboard"></i></span><div><strong>Dựng video</strong><small>FFmpeg · giữ audio gốc</small></div><b></b></div>
+              </div>
+              <div class="job-message" id="job-message"><i data-lucide="info"></i><span>Chọn video để bắt đầu.</span></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view editor-view" id="view-editor">
+          <div class="editor-toolbar">
+            <div><button class="icon-button" data-go="home"><i data-lucide="arrow-left"></i></button><span><small>ĐANG BIÊN TẬP</small><strong id="editor-title">Chưa chọn dự án</strong></span></div>
+            <div class="toolbar-actions"><span class="save-state"><i data-lucide="cloud-check"></i>Tự động lưu</span><button class="button ghost" id="render-button"><i data-lucide="play"></i>Render lại</button><a class="button primary disabled" id="download-button" href="#"><i data-lucide="download"></i>Tải video</a></div>
+          </div>
+          <div class="editor-empty panel" id="editor-empty"><i data-lucide="mouse-pointer-2"></i><h2>Chọn một dự án để biên tập</h2><p>Dự án cần hoàn tất bước tạo timeline trước.</p><button class="button primary" data-go="home">Xem danh sách dự án</button></div>
+          <div class="editor-layout hidden" id="editor-layout">
+            <div class="preview-column panel">
+              <div class="video-stage"><video id="player" playsinline controls></video><img id="meme-overlay" alt="Meme đang hiển thị"></div>
+              <div class="waveform-wrap"><div class="waveform-head"><span><i data-lucide="audio-waveform"></i>Timeline thông minh</span><span id="playhead-time">00:00.00</span></div><div id="waveform"></div><div id="wave-timeline"></div></div>
+              <div class="timeline-list" id="timeline-list"></div>
+            </div>
+            <aside class="inspector panel">
+              <div class="inspector-tabs"><button class="active" data-tab="event">Meme</button><button data-tab="transcript">Lời thoại</button></div>
+              <div id="event-inspector"><div class="inspector-empty"><i data-lucide="panel-right-open"></i><p>Chọn một meme trên timeline để chỉnh sửa.</p></div></div>
+              <div id="transcript-panel" class="hidden"><label class="search-box"><i data-lucide="search"></i><input id="transcript-search" placeholder="Tìm trong lời thoại…"></label><div class="transcript-list" id="transcript-list"></div></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-library">
+          <div class="page-heading library-heading"><div><span class="eyebrow">ASSET LIBRARY</span><h1>Kho meme</h1><p>Metadata tốt giúp AI chọn đúng phản ứng hơn.</p></div><div><input type="file" id="asset-upload" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime"><button class="button primary" id="asset-upload-button"><i data-lucide="upload"></i>Thêm meme</button></div></div>
+          <div class="library-tools panel"><label class="search-box"><i data-lucide="search"></i><input id="library-search" placeholder="Tìm theo tên, tag, cảm xúc…"></label><div class="filter-chips"><button class="active" data-filter="all">Tất cả</button><button data-filter="image">Ảnh</button><button data-filter="gif">GIF</button><button data-filter="video">Video</button></div><span id="library-count">0 asset</span></div>
+          <div class="library-grid" id="library-grid"><div class="empty-state"><span class="spinner"></span><p>Đang tải kho meme…</p></div></div>
+          <dialog class="metadata-dialog" id="metadata-dialog">
+            <form method="dialog" id="metadata-form">
+              <div class="dialog-head"><div><span class="eyebrow">MEME METADATA</span><h2>Chỉnh thông tin</h2></div><button class="icon-button dialog-close" type="button"><i data-lucide="x"></i></button></div>
+              <div class="dialog-preview" id="dialog-preview"></div>
+              <input type="hidden" id="meta-id">
+              <label><span>Mô tả</span><textarea id="meta-description" rows="3" placeholder="Mô tả ngữ cảnh phù hợp…"></textarea></label>
+              <div class="form-grid"><label><span>Tags</span><input id="meta-tags" placeholder="surprised, awkward"></label><label><span>Cảm xúc</span><input id="meta-emotion" placeholder="shock, happy"></label></div>
+              <label><span>Phong cách</span><input id="meta-style" placeholder="reaction, vietnamese"></label>
+              <div class="range-grid"><label><span>Cường độ <b id="intensity-value">50%</b></span><input type="range" id="meta-intensity" min="0" max="1" step="0.05"></label><label><span>Chất lượng <b id="quality-value">50%</b></span><input type="range" id="meta-quality" min="0" max="1" step="0.05"></label></div>
+              <label class="toggle-row"><span><strong>An toàn để sử dụng</strong><small>Chỉ asset an toàn mới được AI chọn</small></span><input type="checkbox" id="meta-safe"><span class="toggle"></span></label>
+              <div class="dialog-actions"><button class="button ghost dialog-close" type="button">Hủy</button><button class="button primary" id="save-metadata" type="submit"><i data-lucide="save"></i>Lưu metadata</button></div>
+            </form>
+          </dialog>
+        </section>
+
+        <section class="view" id="view-settings">
+          <div class="page-heading"><div><span class="eyebrow">SYSTEM</span><h1>Thiết lập & môi trường</h1><p>Trạng thái các thành phần chạy AI và dựng video trên máy.</p></div><button class="button ghost" id="refresh-environment"><i data-lucide="refresh-cw"></i>Kiểm tra lại</button></div>
+          <div class="settings-card panel"><div class="settings-intro"><span class="stat-icon violet"><i data-lucide="shield-check"></i></span><div><h2>Local-first</h2><p>Studio chỉ lắng nghe tại 127.0.0.1. Video và token không được gửi sang dịch vụ khác ngoài backend bạn cấu hình.</p></div></div><div class="environment-list" id="environment-list"><div class="empty-state compact"><span class="spinner"></span></div></div></div>
+          <div class="oss-card panel"><div><span class="eyebrow">OPEN SOURCE STACK</span><h2>Được xây trên nền tảng mở</h2><p>Plyr · WaveSurfer.js · SortableJS · Lucide · FilePond</p></div><i data-lucide="github"></i></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+</body>
+</html>

@@ -39,6 +39,16 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "automeme.review" = ["static/*.html", "static/*.css", "static/*.js"]
+"automeme.studio" = [
+    "static/*.html",
+    "static/*.css",
+    "static/*.js",
+    "static/vendor/*.css",
+    "static/vendor/*.js",
+    "static/vendor/*.mjs",
+    "static/vendor/*.svg",
+    "static/vendor/licenses/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

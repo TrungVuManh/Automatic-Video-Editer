@@ -196,6 +196,32 @@ def review(
 
 
 @app.command()
+def studio(
+    profile: ProfileOpt = None,
+    port: Annotated[int, typer.Option(
+        help="Port loopback; dùng 0 để hệ điều hành tự chọn.", min=0, max=65535,
+    )] = 8765,
+    no_browser: Annotated[bool, typer.Option(
+        "--no-browser", help="Không tự mở trình duyệt.",
+    )] = False,
+) -> None:
+    """Mở AutoMeme Studio: nhập video, chạy AI, chỉnh timeline và quản lý kho meme."""
+    from .studio.server import serve_studio
+    from .studio.service import StudioService
+
+    settings = bootstrap(profile)
+    try:
+        serve_studio(
+            StudioService(settings),
+            port=port,
+            open_browser=not no_browser,
+        )
+    except (ConfigError, OSError, RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+
+
+@app.command()
 def run(
     video: VideoArg,
     profile: ProfileOpt = None,

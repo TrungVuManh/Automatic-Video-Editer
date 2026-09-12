@@ -117,7 +117,7 @@ class LocalMemeProvider(MemeProvider):
                 items.append(MemeCandidate(
                     id=candidate_id,
                     filename=relative,
-                    type=_media_type(path),
+                    type=media_type(path),
                     tags=sorted(tokenize(path.stem)),
                 ))
         self._items = items
@@ -134,7 +134,7 @@ class LocalMemeProvider(MemeProvider):
         return str(Path(filename)).replace("\\", "/").casefold()
 
 
-def _media_type(path: Path) -> str:
+def media_type(path: Path) -> str:
     suffix = path.suffix.casefold()
     if suffix == ".gif":
         return "gif"

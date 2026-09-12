@@ -19,7 +19,9 @@ def _khong_ghi_file_log(monkeypatch):
 def test_help_liet_ke_du_lenh():
     r = runner.invoke(app, ["--help"])
     assert r.exit_code == 0
-    for cmd in ("doctor", "transcribe", "analyze", "inspect", "render", "review", "run"):
+    for cmd in (
+        "doctor", "transcribe", "analyze", "inspect", "render", "review", "studio", "run",
+    ):
         assert cmd in r.output
 
 
@@ -155,3 +157,20 @@ def test_review_tao_session_va_mo_server(monkeypatch):
     ])
     assert result.exit_code == 0
     assert calls == [(sentinel, {"port": 0, "open_browser": False})]
+
+
+def test_studio_tao_service_va_mo_server(monkeypatch):
+    import automeme.studio.server as server_module
+
+    calls = []
+    monkeypatch.setattr(
+        server_module,
+        "serve_studio",
+        lambda service, **kw: calls.append((service, kw)),
+    )
+    result = runner.invoke(app, [
+        "studio", "--port", "0", "--no-browser", "--profile", "funny",
+    ])
+    assert result.exit_code == 0
+    assert calls[0][1] == {"port": 0, "open_browser": False}
+    assert calls[0][0].settings.editing.max_memes_per_minute == 5

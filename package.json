@@ -1,0 +1,16 @@
+{
+  "name": "automeme-studio-ui",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Build-time dependencies vendored for the offline AutoMeme Studio UI",
+  "scripts": {
+    "build:studio": "node scripts/build-studio.mjs"
+  },
+  "dependencies": {
+    "filepond": "4.32.12",
+    "lucide": "1.45.0",
+    "plyr": "3.8.4",
+    "sortablejs": "1.15.7",
+    "wavesurfer.js": "7.12.12"
+  }
+}
