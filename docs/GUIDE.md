@@ -195,6 +195,8 @@ nằm trong `configs/default.yaml`.
 | `OLLAMA_MODEL` | `qwen3:8b` | GPU dưới 8 GB VRAM: `qwen3:4b` |
 | `MEME_TIMING_DELAY` | `0.15` | Độ trễ từ cuối câu đến lúc meme bắt đầu; thường giữ 0.10–0.30 giây |
 | `MEME_LIBRARY_FILE` | `assets/memes/library.jsonl` | Metadata cho thư viện local |
+| `SFX_ENABLED`, `SFX_VOLUME` | `true`, `0.35` | Bật/tắt SFX tự động và chỉnh master volume |
+| `SFX_LIBRARY_FILE` | `assets/sfx/library.jsonl` | Metadata thư viện sound effect local |
 | `MEME_SEARCH_BASE_URL`, `_TOKEN`, `_TOP_K` | — | Khi dùng Meme Search API v1 |
 | `MEME_SEARCH_MAX_DOWNLOAD_MB` | `25` | Giới hạn kích thước mỗi media tải từ API |
 | `OUTPUT_CRF` | `18` | Nhỏ hơn = đẹp hơn, file to hơn |
@@ -327,8 +329,8 @@ automeme analyze data\input\video.mp4 --force  # bỏ kết quả cũ, gọi LLM
 ```
 
 Lệnh đọc `data/transcripts/<tên-video>.json`; chưa có thì thông báo chạy `transcribe` trước.
-Mỗi câu được gửi cùng hai câu trước và một câu sau. LLM trả `insert_meme`, confidence, cảm xúc,
-kiểu reaction và query tìm kiếm. Output sai schema được thử lại một lần; nếu vẫn sai chỉ bỏ
+Mỗi câu được gửi cùng hai câu trước và một câu sau. LLM trả `insert_meme`, `insert_sfx`,
+confidence, cảm xúc và các query tìm kiếm. Output sai schema được thử lại một lần; nếu vẫn sai chỉ bỏ
 câu đó. Code tự đặt thời điểm ở cuối câu + 0,15 giây, kẹp duration, rồi áp confidence,
 cooldown và số meme/phút theo profile. Kết quả:
 
@@ -349,6 +351,8 @@ cooldown và số meme/phút theo profile. Kết quả:
       "reaction_type": "confused reaction",
       "search_query": "confused man reaction",
       "preferred_style": "reaction",
+      "insert_sfx": true,
+      "sfx_query": "awkward question",
       "timing": {"anchor": 8.73, "delay": 0.15, "duration": 1.5}
     }
   ]
@@ -380,6 +384,8 @@ automeme install-memes             # tải đủ 100 template
 automeme install-memes --limit 50  # chỉ lấy 50 template đầu
 automeme install-gifs              # tải thêm 30 reaction GIF động
 automeme install-gifs --limit 15   # chỉ lấy 15 GIF đầu
+automeme install-sfx               # tải 30 sound effect Kenney CC0
+automeme install-sfx --limit 15    # chỉ lấy 15 SFX đầu
 ```
 
 Catalog cố định gồm 100 template phổ biến với taxonomy song ngữ về ngữ cảnh, cảm xúc và phong
@@ -396,6 +402,13 @@ trị được cài để người dùng có thể xem, nhưng đặt `safe=fals
 Ảnh/video riêng đặt trong `assets/memes/`, GIF có thể đặt trong `assets/gifs/`. Khi mở rộng,
 nên có khoảng 200–500 meme chia theo cảm xúc: sốc, bối rối, ngượng, facepalm, hoảng, ăn mừng…
 Media trong các thư mục này không được commit.
+
+Bộ SFX gồm 30 âm OGG ngắn từ Kenney: impact, punch, metal, glass, fail, success, reveal,
+whoosh, click, coin, door và sci-fi. Catalog gắn nhãn Việt–Anh, intensity, duration và âm lượng
+khuyến nghị. Trình cài chỉ nhận HTTPS từ đúng repository/revision GitHub đã ghim, không theo
+redirect, kiểm tra MIME, giới hạn 5 MB và header `OggS`. Asset là CC0 1.0; xem nguồn trong
+`THIRD_PARTY_NOTICES.md`. File được lưu ở `assets/sfx/popular/`, metadata ở
+`assets/sfx/library.jsonl`; cả hai đều không commit.
 
 Không bắt buộc có metadata: local provider vẫn quét `.png`, `.jpg`, `.webp`, `.gif`, `.mp4`,
 `.webm`, `.mov` và tìm theo tên file. Để kết quả tốt hơn, sao chép file mẫu rồi sửa:
@@ -428,9 +441,9 @@ API token không bảo vệ giao diện web/settings của dịch vụ.
 
 ### 5.4 Timeline: viết tay và duyệt
 
-`timeline.json` là "bản dựng" dạng chữ: mỗi meme có thời điểm, thời lượng, file, vị trí, cỡ.
-Bạn xóa meme, đổi thời điểm, đổi file rồi render lại mà không tốn lượt chạy AI. `run` tự dựng
-file này từ `analysis.json` và thư viện meme; bạn vẫn có thể tự viết hoàn toàn bằng tay.
+`timeline.json` là "bản dựng" dạng chữ: mỗi meme hoặc SFX có thời điểm, thời lượng và file.
+Bạn xóa event, đổi thời điểm/asset/âm lượng rồi render lại mà không tốn lượt AI. `run` tự dựng
+file này từ `analysis.json` và các thư viện local; bạn vẫn có thể tự viết hoàn toàn bằng tay.
 
 Đặt ở `data/timelines/<tên-video>.timeline.json` (đúng tên này thì `render` tự tìm thấy):
 
@@ -449,6 +462,15 @@ file này từ `analysis.json` và thư viện meme; bạn vẫn có thể tự 
       "scale": 0.35,
       "status": "pending",
       "reason": "ghi chú cho chính bạn, không bắt buộc"
+    },
+    {
+      "id": "event_002",
+      "type": "sfx",
+      "start": 3.0,
+      "duration": 0.53,
+      "asset": "assets/sfx/popular/ui__error_003.ogg",
+      "volume": 0.25,
+      "status": "pending"
     }
   ]
 }
@@ -457,12 +479,13 @@ file này từ `analysis.json` và thư viện meme; bạn vẫn có thể tự 
 | Khóa | Bắt buộc | Ý nghĩa |
 |---|---|---|
 | `id` | có | Mã riêng của sự kiện, không trùng nhau |
-| `type` | không | Hiện chỉ có `meme` |
+| `type` | không | `meme` (mặc định) hoặc `sfx` |
 | `start` | có | Giây, tính từ đầu video |
 | `duration` | có | Meme hiện bao lâu (giây) |
 | `asset` | có | Đường dẫn ảnh/GIF, tính từ thư mục gốc dự án (hoặc từ `assets/`) |
 | `position` | không | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`. Bỏ trống = `meme.position_default` |
 | `scale` | không | Bề rộng meme so với bề rộng video, 0.05–1.0. Bỏ trống = `meme.scale_default` (0.30) |
+| `volume` | không | Chỉ cho SFX, từ 0 đến 1; mặc định 0.25 |
 | `mode` | không | Hiện chỉ có `overlay` (đè lên video) |
 | `status` | không | `pending`, `accepted`, `rejected`; renderer bỏ qua sự kiện `rejected` |
 | `confidence`, `query`, `reason` | không | Do bước phân tích ghi lại, để bạn hiểu vì sao có meme này |
@@ -501,10 +524,10 @@ Trong Studio:
 1. **Tổng quan** hiển thị dự án gần đây và tình trạng Python/FFmpeg/GPU/Ollama.
 2. **Tạo video** nhận file kéo-thả, cho chọn profile và theo dõi bốn bước pipeline. Mỗi lần chỉ
    có một job GPU; lỗi ở giữa có thể chạy lại và các artifact còn mới được lấy từ cache.
-3. **Biên tập** phát video, đồng bộ transcript và waveform; kéo vùng meme để đổi thời gian,
-   Accept/Reject, thay asset/vị trí/tỉ lệ rồi render lại.
-4. **Kho meme** nhận ảnh/GIF/video và chỉnh tag, cảm xúc, phong cách, cường độ, chất lượng,
-   cờ an toàn. File upload được ghi nguyên tử và giới hạn theo loại.
+3. **Biên tập** phát video, đồng bộ transcript và waveform; kéo vùng meme/SFX để đổi thời gian,
+   Accept/Reject, thay asset/vị trí/tỉ lệ/âm lượng rồi render lại.
+4. **Kho asset** nhận ảnh/GIF/video, nghe thử SFX và lọc theo loại. Nút cài riêng tải bộ
+   100 meme, 30 GIF và 30 SFX.
 
 Studio chỉ bind vào `127.0.0.1`, dùng token ngẫu nhiên cho request thay đổi dữ liệu và không
 public ra LAN/Internet. Các thư viện giao diện đã được đóng gói trong ứng dụng nên chạy offline.
@@ -533,9 +556,10 @@ automeme render data\input\video.mp4 --force     # dựng lại dù đã có fil
 automeme render data\input\video.mp4 --timeline <file khác> --out <nơi lưu>
 ```
 
-Video ra ở `data/output/<tên-video>_automeme.mp4`: cùng độ phân giải, cùng thời lượng, **giữ
-nguyên tiếng gốc**. Ảnh PNG có vùng trong suốt hiển thị đúng; GIF chạy lặp trong khoảng thời
-gian của sự kiện. Chất lượng và tốc độ encode chỉnh bằng `OUTPUT_CRF` và `OUTPUT_PRESET`
+Video ra ở `data/output/<tên-video>_automeme.mp4`: cùng độ phân giải, cùng thời lượng; audio gốc
+được giữ nguyên khi không có SFX, hoặc được mix với SFX khi timeline có event âm thanh. Ảnh PNG
+có vùng trong suốt hiển thị đúng; GIF chạy lặp trong khoảng thời gian của sự kiện. Chất lượng
+và tốc độ encode chỉnh bằng `OUTPUT_CRF` và `OUTPUT_PRESET`
 (mục 4.2).
 
 **Chạy trọn pipeline:**

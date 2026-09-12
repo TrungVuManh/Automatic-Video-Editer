@@ -58,13 +58,15 @@ def validate_timeline(timeline: Timeline, *, video_duration: float | None,
                        f"{format_ts(video_duration)}")
         duong_dan = asset_paths.get(e.asset)
         if duong_dan is None or not ton_tai(duong_dan):
-            loi.append(f"{e.id}: không thấy file meme {e.asset}")
+            kind = "meme" if isinstance(e, MemeEvent) else "SFX"
+            loi.append(f"{e.id}: không thấy file {kind} {e.asset}")
 
-        scale = e.scale
-        if scale is not None and not (SCALE_MIN <= scale <= SCALE_MAX):
-            loi.append(f"{e.id}: scale {scale} ngoài khoảng {SCALE_MIN}–{SCALE_MAX}")
+        if isinstance(e, MemeEvent):
+            scale = e.scale
+            if scale is not None and not (SCALE_MIN <= scale <= SCALE_MAX):
+                loi.append(f"{e.id}: scale {scale} ngoài khoảng {SCALE_MIN}–{SCALE_MAX}")
 
-        if meme_cfg is not None:
+        if meme_cfg is not None and isinstance(e, MemeEvent):
             if e.duration < meme_cfg.duration_min:
                 canh_bao.append(f"{e.id}: dài {e.duration:.2f}s, ngắn hơn mức tối thiểu "
                                 f"{meme_cfg.duration_min}s trong cấu hình")
@@ -72,9 +74,10 @@ def validate_timeline(timeline: Timeline, *, video_duration: float | None,
                 canh_bao.append(f"{e.id}: dài {e.duration:.2f}s, vượt mức tối đa "
                                 f"{meme_cfg.duration_max}s trong cấu hình")
 
-    loi += _kiem_tra_chong_lan(events)
+    meme_events = [event for event in events if isinstance(event, MemeEvent)]
+    loi += _kiem_tra_chong_lan(meme_events)
     if editing_cfg is not None:
-        canh_bao += _kiem_tra_mat_do(events, video_duration, editing_cfg)
+        canh_bao += _kiem_tra_mat_do(meme_events, video_duration, editing_cfg)
     return loi, canh_bao
 
 
@@ -116,13 +119,19 @@ def format_timeline_table(timeline: Timeline, loi: list[str], canh_bao: list[str
     dai_video = f", video {format_ts(video_duration)}" if video_duration else ""
     dong = ["", f"TIMELINE  {timeline.video}  ({active_count} sự kiện bật / "
             f"{len(events)} tổng{dai_video})"]
-    head = (f"  {'mã':<12} {'trạng thái':<10} {'bắt đầu':>9} {'dài':>6}  "
-            f"{'vị trí':<13} {'cỡ':>5}  asset")
+    head = (f"  {'mã':<12} {'loại':<5} {'trạng thái':<10} {'bắt đầu':>9} {'dài':>6}  "
+            f"{'hiển thị/âm lượng':<20} asset")
     dong += [head, "  " + "-" * (len(head) - 2)]
     for e in events:
-        co = f"{e.scale * 100:.0f}%" if e.scale is not None else "mặc"
-        dong.append(f"  {e.id:<12} {e.status:<10} {format_ts(e.start):>9} {e.duration:>6.2f}  "
-                    f"{(e.position or 'mặc định'):<13} {co:>5}  {e.asset}")
+        if isinstance(e, MemeEvent):
+            co = f"{e.scale * 100:.0f}%" if e.scale is not None else "mặc"
+            detail = f"{e.position or 'mặc định'} {co}"
+        else:
+            detail = f"volume {e.volume:.0%}"
+        dong.append(
+            f"  {e.id:<12} {e.type:<5} {e.status:<10} {format_ts(e.start):>9} "
+            f"{e.duration:>6.2f}  {detail:<20} {e.asset}"
+        )
     if not events:
         dong.append("  (chưa có sự kiện nào)")
     for c in canh_bao:

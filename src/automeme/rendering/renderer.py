@@ -19,11 +19,13 @@ def build_ffmpeg_cmd(video: Path, output: Path, plan: RenderPlan, *, video_codec
     cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(video)]
     cmd += plan.input_args
     if plan.filter_complex:
-        cmd += ["-filter_complex", plan.filter_complex, "-map", plan.out_label]
+        cmd += ["-filter_complex", plan.filter_complex]
+    cmd += ["-map", plan.out_label or "0:v"]
+    cmd += ["-map", plan.out_audio_label or "0:a?"]
+    if plan.out_audio_label:
+        cmd += ["-c:a", audio_codec or "aac"]
     else:
-        cmd += ["-map", "0:v"]
-    cmd += ["-map", "0:a?"]                       # video không có tiếng vẫn chạy được
-    cmd += ["-c:a", "copy"] if audio_codec is None else ["-c:a", audio_codec]
+        cmd += ["-c:a", "copy"] if audio_codec is None else ["-c:a", audio_codec]
     cmd += ["-c:v", video_codec, "-crf", str(crf), "-preset", preset,
             "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output)]
     return cmd
@@ -37,6 +39,11 @@ def render(video: Path, output: Path, plan: RenderPlan, *, video_codec: str, crf
     tmp = output.with_name(f"{output.stem}.part{output.suffix}")
     try:
         try:
+            if plan.out_audio_label:
+                run_cmd(build_ffmpeg_cmd(video, tmp, plan, video_codec=video_codec, crf=crf,
+                                         preset=preset, audio_codec=audio_codec, ffmpeg=exe))
+                tmp.replace(output)
+                return output
             run_cmd(build_ffmpeg_cmd(video, tmp, plan, video_codec=video_codec, crf=crf,
                                      preset=preset, audio_codec=None, ffmpeg=exe))
         except CommandError as e:

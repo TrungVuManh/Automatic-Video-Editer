@@ -105,6 +105,16 @@ class MemeSettings(_Section):
         return self
 
 
+class SfxSettings(_Section):
+    enabled: bool
+    library_file: Path
+    volume: float = Field(ge=0, le=1)
+    score_threshold: float = Field(ge=0, le=1)
+    cooldown: float = Field(ge=0)
+    max_per_minute: float = Field(gt=0)
+    duration_max: float = Field(gt=0, le=5)
+
+
 class RankingSettings(_Section):
     semantic_weight: float = Field(ge=0, le=1)
     emotion_weight: float = Field(ge=0, le=1)
@@ -143,6 +153,7 @@ class Settings(_Section):
     meme_search: MemeSearchSettings
     editing: EditingSettings
     meme: MemeSettings
+    sfx: SfxSettings
     ranking: RankingSettings
     output: OutputSettings
 
@@ -172,6 +183,13 @@ ENV_MAP: dict[str, tuple[str, str]] = {
     "MEME_COOLDOWN": ("editing", "cooldown"),
     "MEME_SCORE_THRESHOLD": ("editing", "threshold"),
     "MAX_MEMES_PER_MINUTE": ("editing", "max_memes_per_minute"),
+    "SFX_ENABLED": ("sfx", "enabled"),
+    "SFX_LIBRARY_FILE": ("sfx", "library_file"),
+    "SFX_VOLUME": ("sfx", "volume"),
+    "SFX_SCORE_THRESHOLD": ("sfx", "score_threshold"),
+    "SFX_COOLDOWN": ("sfx", "cooldown"),
+    "MAX_SFX_PER_MINUTE": ("sfx", "max_per_minute"),
+    "SFX_MAX_DURATION": ("sfx", "duration_max"),
     "VIDEO_CODEC": ("output", "video_codec"),
     "AUDIO_CODEC": ("output", "audio_codec"),
     "OUTPUT_CRF": ("output", "crf"),
@@ -214,6 +232,7 @@ def load_settings(profile: str | None = None, overrides: Mapping[str, Any] | Non
     settings.paths.data_dir = resolve_path(settings.paths.data_dir, root)
     settings.paths.assets_dir = resolve_path(settings.paths.assets_dir, root)
     settings.meme.library_file = resolve_path(settings.meme.library_file, root)
+    settings.sfx.library_file = resolve_path(settings.sfx.library_file, root)
     return settings
 
 

@@ -101,7 +101,7 @@ def test_analyze_goi_pipeline_va_in_tom_tat(monkeypatch, tmp_path):
                         lambda video, settings, **kw: (tmp_path / "v.json", analysis))
     r = runner.invoke(app, ["analyze", "v.mp4", "--force"])
     assert r.exit_code == 0
-    assert "1 cơ hội meme" in r.output and "shocked reaction" in r.output
+    assert "1 cơ hội dựng" in r.output and "[meme]: shocked reaction" in r.output
 
 
 def test_analyze_bao_loi_ro_rang(monkeypatch):

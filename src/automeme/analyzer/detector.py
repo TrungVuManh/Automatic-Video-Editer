@@ -71,7 +71,11 @@ def filter_opportunities(
     normalized: list[MemeOpportunity] = []
     for item in opportunities:
         context = by_id.get(item.segment_id)
-        if not item.insert_meme or item.confidence < settings.threshold or context is None:
+        if (
+            not (item.insert_meme or item.insert_sfx)
+            or item.confidence < settings.threshold
+            or context is None
+        ):
             continue
         start = context.end + settings.timing_delay
         remaining = video_duration - start

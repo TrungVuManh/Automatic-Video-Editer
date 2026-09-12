@@ -15,6 +15,7 @@ from ..timeline.schema import (
     SCALE_MAX,
     SCALE_MIN,
     MemeEvent,
+    SfxEvent,
     Timeline,
     ViTri,
     load_timeline,
@@ -37,6 +38,7 @@ class EventPatch(BaseModel):
     asset: str | None = Field(default=None, min_length=1)
     position: ViTri | None = None
     scale: float | None = Field(default=None, ge=SCALE_MIN, le=SCALE_MAX)
+    volume: float | None = Field(default=None, ge=0, le=1)
 
     @model_validator(mode="after")
     def _khong_cho_patch_rong(self) -> EventPatch:
@@ -51,9 +53,19 @@ def apply_event_patch(timeline: Timeline, event_id: str, patch: EventPatch) -> T
     for index, event in enumerate(result.events):
         if event.id != event_id:
             continue
+        changes = patch.model_dump(exclude_unset=True)
+        if isinstance(event, SfxEvent):
+            invalid = {"position", "scale"} & changes.keys()
+            if invalid:
+                raise ReviewError("SFX không có vị trí hoặc tỉ lệ hiển thị.")
+            model = SfxEvent
+        else:
+            if "volume" in changes:
+                raise ReviewError("Meme không có âm lượng SFX.")
+            model = MemeEvent
         data = event.model_dump()
-        data.update(patch.model_dump(exclude_unset=True))
-        result.events[index] = MemeEvent.model_validate(data)
+        data.update(changes)
+        result.events[index] = model.model_validate(data)
         return result
     raise ReviewError(f"Không có sự kiện {event_id!r}.")
 
@@ -103,6 +115,7 @@ class ReviewSession:
                 "events": [event.model_dump(mode="json") for event in timeline.sorted_events()],
                 "active_count": len(timeline.active_events()),
                 "assets": self.available_assets(),
+                "sfx_assets": self.available_sfx_assets(),
                 "transcript": transcript,
                 "errors": errors,
                 "warnings": warnings,
@@ -111,9 +124,21 @@ class ReviewSession:
     def update(self, event_id: str, patch: EventPatch) -> Timeline:
         with self._lock:
             if "asset" in patch.model_fields_set:
-                if patch.asset is None or patch.asset not in self.available_assets():
+                current = next(
+                    (
+                        item for item in load_timeline(self.timeline_path).events
+                        if item.id == event_id
+                    ),
+                    None,
+                )
+                allowed = (
+                    self.available_sfx_assets()
+                    if isinstance(current, SfxEvent)
+                    else self.available_assets()
+                )
+                if patch.asset is None or patch.asset not in allowed:
                     raise ReviewError(
-                        "Asset thay thế phải nằm trong thư viện assets/memes hoặc assets/gifs."
+                        "Asset thay thế phải nằm đúng thư viện meme/GIF hoặc SFX local."
                     )
             timeline = apply_event_patch(load_timeline(self.timeline_path), event_id, patch)
             return self._validate_and_save(timeline)
@@ -170,6 +195,21 @@ class ReviewSession:
                     found.append(path.resolve().relative_to(root).as_posix())
                 except ValueError:
                     continue
+        return sorted(set(found))
+
+    def available_sfx_assets(self) -> list[str]:
+        root = self.settings.paths.assets_dir.parent.resolve()
+        directory = self.settings.paths.assets_dir / "sfx"
+        if not directory.exists():
+            return []
+        found = []
+        for path in sorted(directory.rglob("*.ogg")):
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                found.append(path.resolve().relative_to(root).as_posix())
+            except ValueError:
+                continue
         return sorted(set(found))
 
     def _validate_and_save(self, timeline: Timeline) -> Timeline:

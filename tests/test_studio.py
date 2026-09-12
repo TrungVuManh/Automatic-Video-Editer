@@ -139,6 +139,8 @@ def test_static_ui_co_cac_man_hinh_va_open_source():
     assert "/api/library/popular?limit=100" in js
     assert "animated-library-button" in html
     assert "/api/library/animated?limit=30" in js
+    assert "sfx-library-button" in html
+    assert "/api/library/sfx?limit=30" in js
     assert (STATIC_DIR / "vendor" / "licenses" / "wavesurfer.js.txt").is_file()
 
 

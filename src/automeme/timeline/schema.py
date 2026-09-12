@@ -3,8 +3,7 @@
 Timeline là bản dựng dạng chữ: người sửa được bằng tay rồi render lại mà không tốn lượt AI.
 Vì vậy schema chặt (khóa lạ bị báo lỗi) và thông báo lỗi phải nói rõ sai ở đâu.
 
-Hiện chỉ có sự kiện `meme`; SPEC §73 còn dự kiến sfx, zoom, caption… nên `events` được thiết
-kế để sau này thành union phân biệt theo khóa `type`.
+Timeline hỗ trợ cả overlay `meme` và âm thanh ngắn `sfx`.
 """
 from __future__ import annotations
 
@@ -49,17 +48,39 @@ class MemeEvent(BaseModel):
         return round(self.start + self.duration, 3)
 
 
+class SfxEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    type: Literal["sfx"] = "sfx"
+    start: float = Field(ge=0)
+    duration: float = Field(gt=0, le=5)
+    asset: str
+    volume: float = Field(default=0.25, ge=0, le=1)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    query: str | None = None
+    reason: str | None = None
+    status: Literal["pending", "accepted", "rejected"] = "pending"
+
+    @property
+    def end(self) -> float:
+        return round(self.start + self.duration, 3)
+
+
+TimelineEvent = MemeEvent | SfxEvent
+
+
 class Timeline(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: int = 1
     video: str
-    events: list[MemeEvent] = Field(default_factory=list)
+    events: list[TimelineEvent] = Field(default_factory=list)
 
-    def sorted_events(self) -> list[MemeEvent]:
+    def sorted_events(self) -> list[TimelineEvent]:
         return sorted(self.events, key=lambda e: (e.start, e.id))
 
-    def active_events(self) -> list[MemeEvent]:
+    def active_events(self) -> list[TimelineEvent]:
         return [event for event in self.sorted_events() if event.status != "rejected"]
 
 

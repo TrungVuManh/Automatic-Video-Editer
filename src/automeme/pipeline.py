@@ -20,6 +20,7 @@ from .media.probe import probe
 from .memes.base import MemeProvider
 from .rendering.filters import build_render_plan
 from .rendering.renderer import render
+from .sfx.library import LocalSfxProvider
 from .timeline.builder import build_timeline
 from .timeline.schema import Timeline, load_timeline, save_timeline
 from .timeline.validator import resolve_asset, validate_timeline
@@ -142,8 +143,9 @@ def analyze_video(video: Path, settings: Settings, *, force: bool = False,
 
 
 def build_video_timeline(video: Path, settings: Settings, *, force: bool = False,
-                         provider: MemeProvider | None = None) -> tuple[Path, Timeline]:
-    """analysis.json → tìm/xếp hạng meme → timeline.json đã kiểm tra."""
+                         provider: MemeProvider | None = None,
+                         sfx_provider: LocalSfxProvider | None = None) -> tuple[Path, Timeline]:
+    """analysis.json → tìm/xếp hạng meme và SFX → timeline.json đã kiểm tra."""
     video = Path(video).expanduser()
     if not video.exists():
         raise FileNotFoundError(f"Không thấy video: {video}")
@@ -174,6 +176,10 @@ def build_video_timeline(video: Path, settings: Settings, *, force: bool = False
     from .memes.factory import create_meme_provider
 
     source = provider or create_meme_provider(settings)
+    sound_source = sfx_provider or LocalSfxProvider(
+        library_file=settings.sfx.library_file,
+        project_root=_goc_du_an(settings),
+    )
     info = probe(video)
     timeline = build_timeline(
         analysis,
@@ -182,6 +188,8 @@ def build_video_timeline(video: Path, settings: Settings, *, force: bool = False
         top_k=settings.meme_search.top_k,
         project_root=_goc_du_an(settings),
         video_duration=info.duration,
+        sfx_provider=sound_source,
+        sfx_settings=settings.sfx,
     )
     asset_paths = {
         event.asset: resolve_asset(event.asset, _goc_du_an(settings), settings.paths.assets_dir)
@@ -204,7 +212,9 @@ def build_video_timeline(video: Path, settings: Settings, *, force: bool = False
     record_artifact(
         paths.timeline, state_file, stage="timeline", input_key=input_key,
     )
-    log.info("Timeline: chọn được %d/%d meme → %s", len(timeline.events),
+    meme_count = sum(event.type == "meme" for event in timeline.events)
+    sfx_count = sum(event.type == "sfx" for event in timeline.events)
+    log.info("Timeline: chọn %d meme + %d SFX từ %d cơ hội → %s", meme_count, sfx_count,
              len(analysis.opportunities), paths.timeline)
     return paths.timeline, timeline
 
@@ -290,8 +300,9 @@ def render_timeline(video: Path, settings: Settings, *, timeline_path: Path | No
                              video_w=thong_tin.width or 1920, video_h=thong_tin.height or 1080,
                              scale_default=settings.meme.scale_default,
                              position_default=settings.meme.position_default,
-                             margin_ratio=settings.meme.margin_ratio)
-    log.info("Render %d meme vào %s...", len(events), video.name)
+                             margin_ratio=settings.meme.margin_ratio,
+                             has_audio=thong_tin.has_audio)
+    log.info("Render %d sự kiện vào %s...", len(events), video.name)
     render(video, out, plan, video_codec=settings.output.video_codec, crf=settings.output.crf,
            preset=settings.output.preset, audio_codec=settings.output.audio_codec)
     record_artifact(out, state_file, stage="render", input_key=input_key)
@@ -343,6 +354,8 @@ def _timeline_input_key(video: Path, analysis: Path, settings: Settings,
         "library": _file_identity(settings.meme.library_file),
         "assets": _asset_index(settings),
         "ranking": settings.ranking.model_dump(mode="json"),
+        "sfx": settings.sfx.model_dump(mode="json"),
+        "sfx_library": _file_identity(settings.sfx.library_file),
     })
 
 
@@ -371,7 +384,11 @@ def _file_identity(path: Path) -> str | None:
 def _asset_index(settings: Settings) -> list[tuple[str, int, int]]:
     root = _goc_du_an(settings)
     rows = []
-    for directory in (settings.paths.assets_dir / "memes", settings.paths.assets_dir / "gifs"):
+    for directory in (
+        settings.paths.assets_dir / "memes",
+        settings.paths.assets_dir / "gifs",
+        settings.paths.assets_dir / "sfx",
+    ):
         if not directory.exists():
             continue
         for path in sorted(directory.rglob("*")):

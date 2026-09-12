@@ -8,7 +8,7 @@ from automeme.media.probe import probe
 from automeme.pipeline import render_timeline
 from automeme.rendering.filters import build_render_plan, input_cho_meme, vi_tri_overlay
 from automeme.rendering.renderer import build_ffmpeg_cmd, render
-from automeme.timeline.schema import MemeEvent, Timeline, save_timeline
+from automeme.timeline.schema import MemeEvent, SfxEvent, Timeline, save_timeline
 
 CAN_FFMPEG = pytest.mark.skipif(not (which("ffmpeg") and which("ffprobe")), reason="cần FFmpeg")
 
@@ -108,6 +108,22 @@ def test_lenh_ffmpeg_encode_lai_audio_khi_can():
     assert cmd[cmd.index("-c:a") + 1] == "aac"
 
 
+def test_filter_tron_sfx_vao_audio_goc():
+    event = SfxEvent(
+        id="s1", start=1.25, duration=0.5, asset="hit.ogg", volume=0.28,
+    )
+    plan = _plan([event], [Path("hit.ogg")])
+    assert "[1:a]atrim=0:0.500" in plan.filter_complex
+    assert "volume=0.280,adelay=1250|1250[s0]" in plan.filter_complex
+    assert "[0:a][s0]amix=inputs=2:duration=first" in plan.filter_complex
+    assert plan.out_label == "" and plan.out_audio_label == "[a]"
+    cmd = build_ffmpeg_cmd(
+        Path("in.mp4"), Path("out.mp4"), plan,
+        video_codec="libx264", crf=18, preset="medium", audio_codec="aac",
+    )
+    assert "[a]" in cmd and cmd[cmd.index("-c:a") + 1] == "aac"
+
+
 # ------------------------------------------------------------------ render thật
 @pytest.fixture
 def du_an(tmp_path):
@@ -148,6 +164,31 @@ def test_render_that_chen_png_va_gif(du_an):
     assert (moi.width, moi.height) == (goc.width, goc.height)
     assert moi.has_audio                                          # giữ được tiếng gốc
     assert not list(out.parent.glob("*.part*"))
+
+
+@CAN_FFMPEG
+def test_render_that_tron_sound_effect(du_an):
+    tmp_path, video = du_an
+    sfx_dir = tmp_path / "assets" / "sfx"
+    sfx_dir.mkdir()
+    sound = sfx_dir / "hit.wav"
+    run_cmd([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-f", "lavfi", "-i", "sine=frequency=1200:duration=0.5",
+        str(sound),
+    ])
+    settings = load_settings(env={"OUTPUT_PRESET": "ultrafast"}, root=tmp_path)
+    timeline_path = tmp_path / "sfx.timeline.json"
+    save_timeline(timeline_path, Timeline(video=video.name, events=[
+        SfxEvent(
+            id="s1", start=2.0, duration=0.5,
+            asset="assets/sfx/hit.wav", volume=0.4,
+        ),
+    ]))
+    out, _ = render_timeline(video, settings, timeline_path=timeline_path)
+    assert out.is_file()
+    info = probe(out)
+    assert info.has_audio and info.duration == pytest.approx(5.0, abs=0.2)
 
 
 @CAN_FFMPEG

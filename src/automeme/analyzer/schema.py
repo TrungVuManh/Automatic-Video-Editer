@@ -35,6 +35,8 @@ class MemeOpportunity(_StrictModel):
     search_query: str
     preferred_style: str
     timing: MemeTiming
+    insert_sfx: bool = False
+    sfx_query: str = ""
 
     @model_validator(mode="after")
     def _co_du_thong_tin_khi_de_xuat(self) -> MemeOpportunity:
@@ -43,6 +45,8 @@ class MemeOpportunity(_StrictModel):
             missing = [name for name in required if not getattr(self, name).strip()]
             if missing:
                 raise ValueError("đề xuất chèn meme còn trống: " + ", ".join(missing))
+        if self.insert_sfx and not self.sfx_query.strip():
+            raise ValueError("đề xuất chèn SFX còn trống: sfx_query")
         return self
 
 
@@ -69,13 +73,18 @@ def save_analysis(path: Path, analysis: Analysis) -> None:
 
 def format_analysis_summary(analysis: Analysis, path: Path, limit: int = 5) -> str:
     lines = [
-        f"Analysis: {len(analysis.opportunities)} cơ hội meme "
+        f"Analysis: {len(analysis.opportunities)} cơ hội dựng "
         f"({analysis.backend}/{analysis.model})"
     ]
     for item in analysis.opportunities[:limit]:
         start = item.timing.anchor + item.timing.delay
+        kinds = "+".join(
+            name for name, enabled in (("meme", item.insert_meme), ("SFX", item.insert_sfx))
+            if enabled
+        )
+        query = item.search_query if item.insert_meme else item.sfx_query
         lines.append(
-            f"  [{start:06.2f}s] đoạn {item.segment_id}: {item.search_query} "
+            f"  [{start:06.2f}s] đoạn {item.segment_id} [{kinds}]: {query} "
             f"({item.confidence:.0%})"
         )
     if len(analysis.opportunities) > limit:

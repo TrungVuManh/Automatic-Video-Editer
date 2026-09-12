@@ -17,7 +17,7 @@ force_utf8_console()
 
 app = typer.Typer(
     name="automeme",
-    help="Auto Meme Video Editor — AI tìm khoảnh khắc phù hợp và chèn meme vào video.",
+    help="AutoMeme — AI chèn meme, reaction GIF và sound effect vào video.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -88,7 +88,7 @@ def transcribe(video: VideoArg, profile: ProfileOpt = None, force: ForceOpt = Fa
 
 @app.command()
 def analyze(video: VideoArg, profile: ProfileOpt = None, force: ForceOpt = False) -> None:
-    """Transcript → các khoảnh khắc nên chèn meme (analysis.json)."""
+    """Transcript → các khoảnh khắc nên chèn meme/SFX (analysis.json)."""
     from .analyzer.schema import AnalysisError, format_analysis_summary
     from .pipeline import analyze_video
 
@@ -147,7 +147,7 @@ def render(
     profile: ProfileOpt = None,
     force: ForceOpt = False,
 ) -> None:
-    """Render meme vào video theo timeline.json (FFmpeg)."""
+    """Render meme/GIF và trộn SFX theo timeline.json (FFmpeg)."""
     from .pipeline import render_timeline
     from .timeline.schema import TimelineError
 
@@ -175,7 +175,7 @@ def review(
         "--no-browser", help="Không tự mở trình duyệt.",
     )] = False,
 ) -> None:
-    """Mở giao diện local để xem, accept/reject, thay meme, chỉnh thời gian và render."""
+    """Mở giao diện local để duyệt meme/SFX, chỉnh timeline và render."""
     from .review.server import serve_review
     from .review.service import ReviewError, create_review_session
     from .timeline.schema import TimelineError
@@ -205,7 +205,7 @@ def studio(
         "--no-browser", help="Không tự mở trình duyệt.",
     )] = False,
 ) -> None:
-    """Mở AutoMeme Studio: nhập video, chạy AI, chỉnh timeline và quản lý kho meme."""
+    """Mở Studio: nhập video, chạy AI, chỉnh timeline và quản lý kho asset."""
     from .studio.server import serve_studio
     from .studio.service import StudioService
 
@@ -273,6 +273,32 @@ def install_gifs(
         raise typer.Exit(code=1)
 
 
+@app.command("install-sfx")
+def install_sfx(
+    profile: ProfileOpt = None,
+    limit: Annotated[int, typer.Option(
+        help="Số sound effect CC0 cần cài (1–30).", min=1, max=30,
+    )] = 30,
+) -> None:
+    """Tải sound effect Kenney CC0 có nhãn ngữ nghĩa Việt–Anh."""
+    from .sfx.library import install_popular_sfx
+
+    settings = bootstrap(profile)
+    try:
+        result = install_popular_sfx(settings, limit=limit)
+    except (OSError, RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(
+        f"Kho SFX CC0: {result.installed} tải mới, {result.reused} dùng lại, "
+        f"{result.failed} lỗi / {result.total} âm."
+    )
+    if result.failed:
+        for error in result.errors:
+            typer.echo(f"  - {error}")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def run(
     video: VideoArg,
@@ -280,7 +306,7 @@ def run(
     out: Annotated[Path | None, typer.Option("--out", help="Nơi lưu video ra.")] = None,
     force: ForceOpt = False,
 ) -> None:
-    """Chạy trọn pipeline: transcribe → analyze → tìm meme → timeline → render."""
+    """Chạy trọn pipeline: transcribe → AI chọn meme/SFX → timeline → render."""
     from .analyzer.schema import AnalysisError
     from .pipeline import run_video
     from .timeline.schema import TimelineError
@@ -292,4 +318,6 @@ def run(
             RuntimeError, ValueError) as e:
         log.error("%s", e)
         raise typer.Exit(code=1) from None
-    typer.echo(f"Hoàn tất: {len(timeline.events)} meme → {output}")
+    meme_count = sum(event.type == "meme" for event in timeline.events)
+    sfx_count = sum(event.type == "sfx" for event in timeline.events)
+    typer.echo(f"Hoàn tất: {meme_count} meme + {sfx_count} SFX → {output}")

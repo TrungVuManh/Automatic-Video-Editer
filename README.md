@@ -1,11 +1,11 @@
 # Auto Meme Video Editor (`automeme`)
 
-AI phân tích lời thoại trong video tiếng Việt, tìm khoảnh khắc nên chèn meme/reaction, tìm
-meme phù hợp theo ngữ nghĩa và render vào đúng lúc. Chạy local: **faster-whisper** nghe,
+AI phân tích lời thoại trong video tiếng Việt, tìm khoảnh khắc nên chèn meme/reaction/SFX, tìm
+asset phù hợp theo ngữ nghĩa và render vào đúng lúc. Chạy local: **faster-whisper** nghe,
 **Ollama** quyết định, **FFmpeg** dựng.
 
 ```
-video → audio → transcript → LLM tìm khoảnh khắc → tìm & xếp hạng meme → timeline.json → duyệt → render
+video → transcript → LLM chọn khoảnh khắc → meme/GIF/SFX → timeline.json → duyệt → render
 ```
 
 Mọi quyết định của AI nằm trong `timeline.json` để người sửa được trước khi render — AI không
@@ -17,7 +17,7 @@ render trực tiếp.
 |---|---|---|
 | Stage A | Khung dự án, cấu hình + profile, log, `automeme doctor` | ✅ |
 | Iteration 1 | `automeme transcribe` → `transcript.json` | ✅ |
-| Iteration 2 | `timeline.json` + render meme PNG/JPG/GIF | ✅ |
+| Iteration 2 | `timeline.json` + render meme PNG/JPG/GIF và trộn SFX | ✅ |
 | Iteration 3 | Ollama/Claude tìm khoảnh khắc → `analysis.json` | ✅ |
 | Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ✅ |
 | Stage F | Cache/invalidation + resume toàn pipeline | ✅ |
@@ -77,6 +77,7 @@ automeme analyze data\input\video.mp4        # transcript → analysis.json
 automeme analyze data\input\video.mp4 --force     # gọi LLM phân tích lại
 automeme install-memes                             # cài kho 100 meme có nhãn song ngữ
 automeme install-gifs                              # cài thêm 30 reaction GIF động
+automeme install-sfx                               # cài 30 sound effect Kenney CC0
 automeme run data\input\video.mp4 --profile funny # chạy trọn pipeline MVP
 automeme review data\input\video.mp4               # duyệt trên giao diện web local
 automeme studio                                     # mở giao diện đầy đủ (khuyên dùng)
@@ -110,6 +111,12 @@ Bấm **Cài 30 GIF động** hoặc chạy `automeme install-gifs` để thêm 
 khi đưa vào thư viện. Prompt AI đặt style `animated` cho phản ứng cần chuyển động để ranker ưu
 tiên GIF; 2 GIF có chữ thô tục/nhân vật chính trị mặc định `safe=false`.
 
+Bấm **Cài 30 SFX CC0** hoặc chạy `automeme install-sfx` để thêm impact, fail, success,
+reveal, whoosh, click, coin, glass và sci-fi sound. Đây là asset Kenney CC0 được tải từ GitHub
+ở một commit cố định, kiểm tra MIME, giới hạn dung lượng và magic bytes OGG trước khi lưu. AI
+chỉ đề xuất SFX ở điểm nhấn rõ; code tiếp tục áp cooldown 8 giây, tối đa 3 âm/phút và master
+volume 35% để không lấn lời thoại.
+
 `transcribe` cần faster-whisper: `python -m pip install -e ".[asr-cuda]"` (máy không có GPU
 NVIDIA thì dùng `".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`). Lần chạy đầu tải model khoảng 3 GB.
 Kết quả ở `data/transcripts/<tên-video>.json`; chạy lại thì bỏ qua vì đã có cache.
@@ -128,8 +135,8 @@ automeme review data\input\video.mp4
 automeme render data\input\video.mp4
 ```
 
-`review` chỉ mở trên `127.0.0.1`: phát video kèm meme preview, hiển thị transcript, cho
-Accept/Reject, thay meme trong thư viện, chỉnh thời điểm/vị trí/tỉ lệ và bấm Render. Sự kiện
+`review` chỉ mở trên `127.0.0.1`: phát video kèm asset preview, hiển thị transcript, cho
+Accept/Reject, thay meme/SFX trong thư viện, chỉnh thời điểm/vị trí/tỉ lệ/âm lượng và Render. Sự kiện
 rejected vẫn nằm trong timeline để hoàn tác nhưng renderer sẽ bỏ qua.
 
 `inspect` in bảng sự kiện, báo lỗi chặn render (thiếu file meme, meme vượt quá thời lượng video,

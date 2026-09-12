@@ -26,7 +26,7 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 
 | File | Vai trò | Ghi chú |
 |---|---|---|
-| `src/automeme/cli.py` | CLI Typer | `doctor`, `install-memes`, `install-gifs`, `transcribe`, `analyze`, `inspect`, `render`, `run` chạy được. `bootstrap(profile)` nạp cấu hình + bật file log cho mọi lệnh thật |
+| `src/automeme/cli.py` | CLI Typer | Có thêm `install-sfx`; các lệnh doctor/install/transcribe/analyze/inspect/render/run/studio chạy được |
 | `src/automeme/pipeline.py` | Nối các bước | `transcribe_video(...)`, `analyze_video(...)`, `build_video_timeline(...)`, `render_timeline(...)`, `run_video(...)`; các backend đều tiêm được để test offline |
 | `src/automeme/cache.py` | Cache/invalidation | Manifest strict, hash ổn định, nhận biết fresh/stale/file bị sửa; manifest nằm ngoài artifact người dùng chỉnh |
 | `src/automeme/analyzer/context.py` | Context window | `build_context_windows`: mặc định 2 đoạn trước + 1 đoạn sau, cấu hình được |
@@ -37,15 +37,16 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/memes/local.py` | Thư viện local | Đọc `library.jsonl` theo từng dòng, tìm theo metadata/tên file, tự quét media và bỏ asset `safe=false` |
 | `src/automeme/memes/popular.py` + `catalog/` | Kho meme phổ biến | Catalog 100 template + ontology Việt–Anh; tải HTTPS có giới hạn/MIME, upsert nguyên tử, ghi nguồn và chặn 3 mục nhạy cảm khỏi auto-select |
 | `src/automeme/memes/animated.py` + `catalog/` | Kho GIF động | 30 reaction GIF từ GitHub ghim SHA; kiểm tra allowlist/MIME/kích thước/số frame, nhãn semantic và 2 mục `safe=false` |
+| `src/automeme/sfx/` + `catalog/` | Kho SFX CC0 | 30 âm Kenney có nhãn Việt–Anh; downloader ghim SHA/allowlist, kiểm tra MIME/kích thước/OggS, provider local tìm semantic |
 | `src/automeme/memes/meme_search.py` | Meme Search API v1 | Vector search qua HTTP, bearer token, fallback local; chỉ tải ứng viên đã chọn vào cache bằng file tạm |
 | `src/automeme/memes/ranker.py` | Xếp hạng | Hàm thuần kết hợp semantic, emotion, style, quality, novelty và phạt meme vừa dùng |
 | `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video |
 | `src/automeme/review/` | Web UI local | Preview video/meme/transcript; accept/reject/replace/chỉnh timing; API loopback có token; nút render |
 | `src/automeme/studio/` | UI/UX đầy đủ | Dashboard, upload nguyên tử, job pipeline nền, editor waveform, transcript, render/download và CRUD metadata kho meme |
-| `src/automeme/timeline/schema.py` | Định dạng timeline | pydantic `Timeline`/`MemeEvent` (`extra="forbid"`), `load/save_timeline`, lỗi chỉ rõ "sự kiện #n → khóa" |
+| `src/automeme/timeline/schema.py` | Định dạng timeline | pydantic union `MemeEvent`/`SfxEvent` (`extra="forbid"`), tương thích timeline meme cũ |
 | `src/automeme/timeline/validator.py` | Ràng buộc cứng (SPEC §54) | `validate_timeline` → (lỗi chặn render, cảnh báo); `resolve_asset`; `format_timeline_table` cho lệnh inspect |
 | `src/automeme/rendering/filters.py` | Dựng filtergraph | `build_render_plan` (hàm thuần) → tham số `-i` + `filter_complex`; `vi_tri_overlay`, `input_cho_meme` |
-| `src/automeme/rendering/renderer.py` | Gọi FFmpeg | `build_ffmpeg_cmd` (thuần) + `render` ghi file tạm rồi đổi tên; copy audio gốc, chỉ encode lại khi copy hỏng |
+| `src/automeme/rendering/renderer.py` | Gọi FFmpeg | Overlay hình/GIF/video và delay + mix SFX; audio gốc chỉ encode lại khi cần lọc/mix |
 | `src/automeme/workspace.py` | Đường dẫn + khóa cache | `video_fingerprint` (kích thước + 1 MB đầu/cuối), `asr_key`, `slug`, `paths_for` |
 | `src/automeme/transcription/base.py` | Interface `Transcriber` | `transcribe(audio) -> dict thô`, `unload()` trả VRAM |
 | `src/automeme/transcription/whisper.py` | Backend faster-whisper | Nạp model ở lần dùng đầu; `them_dll_cuda()` (Windows tìm DLL cuDNN/cuBLAS trong site-packages); `giai_thich_loi_model` dịch lỗi CTranslate2 sang tiếng Việt |
@@ -106,6 +107,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
 | Catalog 100 meme phổ biến có nhãn | Xong | Đã tải thật 100/100; test catalog, tải/tái sử dụng, nhãn song ngữ, safe filter, CLI và Studio API |
 | Catalog 30 reaction GIF có nhãn | Xong | Đã tải thật 30/30; mọi file 7–293 frame, test parser GIF, URL ghim SHA, semantic search, CLI và Studio API |
+| Catalog 30 sound effect CC0 | Xong | Đã tải thật 30/30 và chạy lại reuse 30/30; OggS/ffprobe hợp lệ, AI schema + timeline + FFmpeg mix + Studio audio preview |
 | Xếp hạng + dựng timeline | Xong | Test trọng số, novelty/phạt trùng, fallback ứng viên và giới hạn cuối video |
 | `automeme run` | Xong | Test toàn luồng với backend AI giả và FFmpeg thật: video → transcript → analysis → timeline → MP4 |
 | Cache/invalidation toàn pipeline | Xong | Analysis, timeline và render có input key riêng; đổi config làm mới đúng bước, timeline/output sửa ngoài được bảo vệ |
@@ -133,7 +135,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **252 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **264 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -386,6 +388,7 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] Quản lý kho meme và metadata
 - [x] Cài catalog 100 meme có taxonomy Việt–Anh và safe filter
 - [x] Cài catalog 30 reaction GIF động, xác minh frame và ưu tiên bằng style `animated`
+- [x] Cài catalog 30 SFX Kenney CC0, AI chọn theo query, cooldown/mật độ/volume và FFmpeg mix
 - [x] Vendor OSS offline + third-party notices
 
 ---
@@ -406,6 +409,18 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-13 (phiên 10) — Sound effect CC0 end-to-end (Codex)
+
+**Đã làm.** Thêm catalog 30 SFX Kenney CC0 với nhãn Việt–Anh, `automeme install-sfx` và nút
+**Cài 30 SFX CC0** trong Studio. Downloader chỉ nhận đúng HTTPS host/repo/revision đã ghim,
+không theo redirect, giới hạn 5 MB và xác minh `OggS`; đã tải thật 30/30 và lần hai reuse 30/30.
+
+Schema AI có `insert_sfx`/`sfx_query`; timeline hỗ trợ `SfxEvent`, vẫn đọc được timeline meme
+cũ. Builder áp score threshold, cooldown, giới hạn âm/phút và master volume. Renderer FFmpeg
+delay từng âm đến timestamp rồi `amix` với audio gốc; đã test render thật giữ nguyên thời lượng.
+Studio liệt kê/nghe thử/lọc SFX và editor cho thay file, chỉnh timing, duration, volume,
+Accept/Reject. Tổng kiểm thử sau thay đổi: **264 passed**, ruff sạch.
 
 ### 2026-09-12 (phiên 9) — Kho reaction GIF động (Codex)
 

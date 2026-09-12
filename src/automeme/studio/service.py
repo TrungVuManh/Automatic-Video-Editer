@@ -196,6 +196,7 @@ class StudioService:
 
     def library(self) -> list[dict[str, Any]]:
         from ..memes.local import LocalMemeProvider
+        from ..sfx.library import LocalSfxProvider
 
         provider = LocalMemeProvider(
             library_file=self.settings.meme.library_file,
@@ -210,12 +211,20 @@ class StudioService:
             data = item.model_dump(mode="json")
             data["preview_url"] = "/media/library?id=" + item.id
             rows.append(data)
+        sound_provider = LocalSfxProvider(
+            library_file=self.settings.sfx.library_file,
+            project_root=self.settings.paths.assets_dir.parent,
+        )
+        for item in sound_provider._load():
+            data = item.model_dump(mode="json")
+            data["preview_url"] = "/media/library?id=" + item.id
+            rows.append(data)
         return sorted(rows, key=lambda item: item["id"].casefold())
 
     def library_asset(self, item_id: str) -> Path:
         item = next((row for row in self.library() if row["id"] == item_id), None)
         if item is None:
-            raise StudioError(f"Không có meme {item_id!r}.")
+            raise StudioError(f"Không có asset {item_id!r}.")
         root = self.settings.paths.assets_dir.parent
         path = Path(item["filename"])
         attempts = [path] if path.is_absolute() else [
@@ -223,6 +232,7 @@ class StudioService:
             self.settings.meme.library_file.parent / path,
             self.settings.paths.assets_dir / "memes" / path,
             self.settings.paths.assets_dir / "gifs" / path,
+            self.settings.paths.assets_dir / "sfx" / path,
         ]
         for attempt in attempts:
             resolved = attempt.resolve()
@@ -240,6 +250,8 @@ class StudioService:
         existing = next((row for row in self.library() if row["id"] == item_id), None)
         if existing is None:
             raise StudioError(f"Không có meme {item_id!r}.")
+        if existing.get("type") == "audio":
+            raise StudioError("Metadata SFX mặc định là chỉ đọc để giữ catalog CC0 nhất quán.")
         candidate = MemeCandidate.model_validate({
             **{key: value for key, value in existing.items() if key != "preview_url"},
             **patch.model_dump(),
@@ -259,6 +271,13 @@ class StudioService:
 
         with self._library_lock:
             result = install_animated_gifs(self.settings, limit=limit)
+        return result.model_dump(mode="json")
+
+    def install_sfx_library(self, *, limit: int = 30) -> dict[str, Any]:
+        from ..sfx.library import install_popular_sfx
+
+        with self._library_lock:
+            result = install_popular_sfx(self.settings, limit=limit)
         return result.model_dump(mode="json")
 
     def start_job(self, request: JobRequest) -> dict[str, Any]:

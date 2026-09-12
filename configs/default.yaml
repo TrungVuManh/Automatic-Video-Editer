@@ -59,6 +59,15 @@ meme:
   position_default: bottom-right   # top-left | top-right | bottom-left | bottom-right | center
   margin_ratio: 0.03         # lề của meme, tính theo bề rộng video
 
+sfx:
+  enabled: true
+  library_file: assets/sfx/library.jsonl
+  volume: 0.35               # master volume; còn nhân với mức khuyến nghị từng âm
+  score_threshold: 0.35      # bỏ kết quả local không đủ khớp ngữ nghĩa
+  cooldown: 8.0              # tránh rải âm liên tục làm mệt tai
+  max_per_minute: 3
+  duration_max: 2.0
+
 ranking:
   semantic_weight: 0.45
   emotion_weight: 0.20

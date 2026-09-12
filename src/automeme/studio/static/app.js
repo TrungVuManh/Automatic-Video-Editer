@@ -146,6 +146,7 @@ function setupUploads(){
   $("#asset-upload-button").onclick=()=>$("#asset-upload").click();
   $("#popular-library-button").onclick=installPopularLibrary;
   $("#animated-library-button").onclick=installAnimatedLibrary;
+  $("#sfx-library-button").onclick=installSfxLibrary;
   $("#asset-upload").onchange=async event=>{
     const file=event.target.files[0]; if(!file)return;
     try{
@@ -208,12 +209,13 @@ async function loadEditor(videoName){
 
 function mediaPreview(url,type,alt=""){
   if(type==="video")return `<video src="${attr(url)}" muted loop preload="metadata" aria-label="${attr(alt)}"></video>`;
+  if(type==="audio")return `<audio src="${attr(url)}" controls preload="metadata" aria-label="${attr(alt)}"></audio>`;
   return `<img src="${attr(url)}" alt="${attr(alt)}" loading="lazy">`;
 }
 
 function renderTimeline(){
   const root=$("#timeline-list"), events=state.currentProject.events;
-  root.innerHTML=events.map(event=>`<button class="event-chip ${event.status==="rejected"?"rejected":""}" data-event="${attr(event.id)}">${mediaPreview(event.preview_url,event.asset.match(/\.(mp4|webm|mov)$/i)?"video":"image",event.id)}<span><strong>${escapeHtml(event.query||event.id)}</strong><small>${formatTime(event.start)} · ${event.duration.toFixed(1)}s · ${escapeHtml(event.status)}</small></span></button>`).join("");
+  root.innerHTML=events.map(event=>`<button class="event-chip ${event.status==="rejected"?"rejected":""}" data-event="${attr(event.id)}">${mediaPreview(event.preview_url,event.type==="sfx"?"audio":event.asset.match(/\.(mp4|webm|mov)$/i)?"video":"image",event.id)}<span><strong>${escapeHtml(event.query||event.id)}</strong><small>${escapeHtml(event.type.toUpperCase())} · ${formatTime(event.start)} · ${event.duration.toFixed(1)}s</small></span></button>`).join("");
   $$("[data-event]",root).forEach(button=>button.onclick=()=>selectEvent(button.dataset.event));
   if(window.Sortable) new window.Sortable(root,{animation:160,direction:"horizontal",onEnd:()=>toast("Thứ tự hiển thị được quyết định bởi timestamp trên waveform.")});
 }
@@ -242,6 +244,13 @@ function selectEvent(eventId){
 
 function renderEventInspector(){
   const event=state.selectedEvent, assets=state.currentProject.assets;
+  if(event.type==="sfx"){
+    const sounds=state.currentProject.sfx_assets||[];
+    $("#event-inspector").innerHTML=`<div class="event-form"><div class="event-preview">${mediaPreview(event.preview_url,"audio",event.id)}</div><label><span>Sound effect thay thế</span><select id="event-asset">${sounds.map(asset=>`<option value="${attr(asset)}" ${asset===event.asset?"selected":""}>${escapeHtml(asset.split("/").pop())}</option>`).join("")}</select></label><div class="form-grid"><label><span>Bắt đầu (giây)</span><input id="event-start" type="number" min="0" step="0.05" value="${event.start}"></label><label><span>Thời lượng</span><input id="event-duration" type="number" min="0.01" max="5" step="0.01" value="${event.duration}"></label></div><label><span>Âm lượng (0–100%)</span><input id="event-volume" type="range" min="0" max="1" step="0.01" value="${event.volume}"></label><button class="button primary wide" id="save-event"><i data-lucide="save"></i>Lưu thay đổi</button><div class="event-actions"><button class="button accept" id="accept-event"><i data-lucide="check"></i>Chấp nhận</button><button class="button reject" id="reject-event"><i data-lucide="x"></i>Từ chối</button></div></div>`;
+    $("#save-event").onclick=()=>updateEvent(event.id,{asset:$("#event-asset").value,start:Number($("#event-start").value),duration:Number($("#event-duration").value),volume:Number($("#event-volume").value)});
+    $("#accept-event").onclick=()=>setEventStatus(event.id,"accept");
+    $("#reject-event").onclick=()=>setEventStatus(event.id,"reject");icons();return;
+  }
   const type=event.asset.match(/\.(mp4|webm|mov)$/i)?"video":"image";
   $("#event-inspector").innerHTML=`<div class="event-form"><div class="event-preview">${mediaPreview(event.preview_url,type,event.id)}</div><label><span>Meme thay thế</span><select id="event-asset">${assets.map(asset=>`<option value="${attr(asset)}" ${asset===event.asset?"selected":""}>${escapeHtml(asset.split("/").pop())}</option>`).join("")}</select></label><div class="form-grid"><label><span>Bắt đầu (giây)</span><input id="event-start" type="number" min="0" step="0.05" value="${event.start}"></label><label><span>Thời lượng</span><input id="event-duration" type="number" min="0.1" step="0.05" value="${event.duration}"></label></div><div class="form-grid"><label><span>Vị trí</span><select id="event-position">${["top-left","top-right","bottom-left","bottom-right","center"].map(value=>`<option ${value===(event.position||"bottom-right")?"selected":""}>${value}</option>`).join("")}</select></label><label><span>Tỉ lệ</span><input id="event-scale" type="number" min="0.05" max="1" step="0.05" value="${event.scale||.3}"></label></div><button class="button primary wide" id="save-event"><i data-lucide="save"></i>Lưu thay đổi</button><div class="event-actions"><button class="button accept" id="accept-event"><i data-lucide="check"></i>Chấp nhận</button><button class="button reject" id="reject-event"><i data-lucide="x"></i>Từ chối</button></div></div>`;
   $("#save-event").onclick=()=>updateEvent(event.id,{asset:$("#event-asset").value,start:Number($("#event-start").value),duration:Number($("#event-duration").value),position:$("#event-position").value,scale:Number($("#event-scale").value)});
@@ -266,7 +275,7 @@ function renderTranscript(){
 
 function onTimeUpdate(){
   const time=state.player.currentTime; $("#playhead-time").textContent=formatTime(time);
-  const event=state.currentProject?.events.find(item=>item.status!=="rejected"&&time>=item.start&&time<=item.start+item.duration);
+  const event=state.currentProject?.events.find(item=>item.type==="meme"&&item.status!=="rejected"&&time>=item.start&&time<=item.start+item.duration);
   const overlay=$("#meme-overlay");
   if(!event){overlay.style.display="none";} else if(!event.asset.match(/\.(mp4|webm|mov)$/i)){
     overlay.src=event.preview_url;overlay.style.display="block";const scale=event.scale||.3;overlay.style.width=`${scale*100}%`;overlay.style.height="auto";
@@ -300,6 +309,7 @@ function openMetadata(id){
   $("#meta-id").value=item.id;$("#meta-description").value=item.description;$("#meta-tags").value=item.tags.join(", ");$("#meta-emotion").value=item.emotion.join(", ");$("#meta-style").value=item.style.join(", ");$("#meta-intensity").value=item.intensity;$("#meta-quality").value=item.quality;$("#meta-safe").checked=item.safe;
   $("#intensity-value").textContent=`${Math.round(item.intensity*100)}%`;$("#quality-value").textContent=`${Math.round(item.quality*100)}%`;
   const source=$("#meta-source");source.classList.toggle("hidden",!item.source_url);source.textContent=item.source_url?`Nguồn: ${item.source_url} · ${item.license_note||"Hãy tự xác minh quyền sử dụng trước khi xuất bản."}`:"";
+  $("#save-metadata").classList.toggle("hidden",item.type==="audio");
   $("#dialog-preview").innerHTML=mediaPreview(item.preview_url,item.type,item.id);$("#metadata-dialog").showModal();icons();
 }
 async function installPopularLibrary(){
@@ -311,6 +321,11 @@ async function installAnimatedLibrary(){
   const button=$("#animated-library-button"),old=button.innerHTML;
   button.disabled=true;button.innerHTML='<span class="spinner"></span>Đang tải 30 GIF';
   try{const result=await api("/api/library/animated?limit=30",{method:"POST"});toast(`Kho GIF: ${result.installed} tải mới, ${result.reused} dùng lại${result.failed?`, ${result.failed} lỗi`:""}.`,result.failed?"error":"success");await loadLibrary();await loadDashboard();}catch(error){toast(error.message,"error");}finally{button.disabled=false;button.innerHTML=old;icons();}
+}
+async function installSfxLibrary(){
+  const button=$("#sfx-library-button"),old=button.innerHTML;
+  button.disabled=true;button.innerHTML='<span class="spinner"></span>Đang tải 30 SFX';
+  try{const result=await api("/api/library/sfx?limit=30",{method:"POST"});toast(`Kho SFX: ${result.installed} tải mới, ${result.reused} dùng lại${result.failed?`, ${result.failed} lỗi`:""}.`,result.failed?"error":"success");await loadLibrary();await loadDashboard();}catch(error){toast(error.message,"error");}finally{button.disabled=false;button.innerHTML=old;icons();}
 }
 async function saveMetadata(event){
   event.preventDefault();const id=$("#meta-id").value;

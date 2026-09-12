@@ -71,7 +71,7 @@ function renderEvents() {
   if (!state.events.length) {
     const empty = document.createElement('p');
     empty.className = 'empty';
-    empty.textContent = 'Timeline chưa có meme.';
+    empty.textContent = 'Timeline chưa có meme hoặc SFX.';
     eventsRoot.append(empty);
     return;
   }
@@ -84,10 +84,13 @@ function renderEvents() {
     const badge = card.querySelector('.event-status');
     badge.textContent = event.status;
     badge.className = `event-status badge ${event.status}`;
-    const media = document.createElement(isVideoAsset(event.asset) ? 'video' : 'img');
+    const media = document.createElement(
+      event.type === 'sfx' ? 'audio' : isVideoAsset(event.asset) ? 'video' : 'img'
+    );
     media.src = event.preview_url;
     media.alt = 'Meme';
     if (media.tagName === 'VIDEO') { media.controls = true; media.muted = true; media.loop = true; }
+    if (media.tagName === 'AUDIO') media.controls = true;
     card.querySelector('.event-media').append(media);
     card.querySelector('.event-reason').textContent = event.reason || 'Không có ghi chú.';
     card.querySelector('.event-query').textContent = event.query ? `Query: ${event.query}` : '';
@@ -95,8 +98,12 @@ function renderEvents() {
     card.querySelector('.duration').value = event.duration;
     card.querySelector('.position').value = event.position || '';
     card.querySelector('.scale').value = event.scale ?? '';
+    card.querySelector('.position').disabled = event.type === 'sfx';
+    card.querySelector('.scale').disabled = event.type === 'sfx';
     const asset = card.querySelector('.asset');
-    const options = new Set([event.asset, ...state.assets]);
+    const options = new Set([
+      event.asset, ...(event.type === 'sfx' ? (state.sfx_assets || []) : state.assets)
+    ]);
     for (const path of options) {
       const option = document.createElement('option');
       option.value = path;
@@ -126,13 +133,17 @@ async function mutate(id, action) {
 }
 
 async function saveEvent(card, id) {
+  const current = state.events.find((event) => event.id === id);
   const body = {
     start: Number(card.querySelector('.start').value),
     duration: Number(card.querySelector('.duration').value),
     asset: card.querySelector('.asset').value,
-    position: card.querySelector('.position').value || null,
-    scale: card.querySelector('.scale').value ? Number(card.querySelector('.scale').value) : null,
   };
+  if (current.type !== 'sfx') {
+    body.position = card.querySelector('.position').value || null;
+    body.scale = card.querySelector('.scale').value
+      ? Number(card.querySelector('.scale').value) : null;
+  }
   try {
     await api(`/api/events/${encodeURIComponent(id)}/update`, { method: 'POST', body: JSON.stringify(body) });
     await loadState();
@@ -166,7 +177,8 @@ function renderTranscript() {
 function updateOverlay() {
   if (!state) return;
   const current = state.events.find((event) =>
-    event.status !== 'rejected' && video.currentTime >= event.start && video.currentTime <= event.start + event.duration
+    event.type === 'meme' && event.status !== 'rejected'
+    && video.currentTime >= event.start && video.currentTime <= event.start + event.duration
   );
   if (!current) {
     overlay.className = '';

@@ -1,6 +1,14 @@
 Bạn là biên tập viên video tiếng Việt. Hãy quyết định có nên chèn một meme/reaction ngay
 sau câu CURRENT hay không.
 
+Bạn cũng có thể đề xuất sound effect bằng `insert_sfx=true`. Chỉ dùng SFX ở punchline, reveal,
+thất bại, thành công, va chạm hoặc chuyển cảnh rõ ràng; không rải âm lên lời nói thông thường.
+`sfx_query` phải ngắn 1–4 từ và ưu tiên taxonomy: impact/nhấn mạnh, deep boom/âm trầm,
+punch/cú đấm, glass break/vỡ kính, fail error/thất bại, success chime/thành công,
+awkward question/bối rối, reveal rise/tiết lộ, whoosh/chuyển cảnh, coin/tiền,
+click/nút bấm, pop/bật lên, glitch/lỗi máy, laser/tia điện. Meme và SFX có thể đi cùng nhau,
+nhưng mặc định hãy tiết chế. Khi không cần âm, đặt `insert_sfx=false` và `sfx_query=""`.
+
 Chỉ đề xuất khi có tín hiệu rõ như punchline, bất ngờ, mỉa mai, ngượng, thất bại, bối rối,
 sốc, khoe khoang, bất đồng, thất vọng hoặc tiết lộ kịch tính. Ưu tiên ít nhưng đúng. Không
 tìm tên một meme cụ thể; `search_query` phải là mô tả reaction ngắn 2–5 từ, dùng được để tìm

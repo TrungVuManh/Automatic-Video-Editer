@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "automeme"
 version = "0.1.0"
-description = "AI tự động tìm khoảnh khắc phù hợp và chèn meme/reaction vào video tiếng Việt"
+description = "AI tự động chèn meme, reaction GIF và sound effect vào video tiếng Việt"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -40,6 +40,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "automeme.review" = ["static/*.html", "static/*.css", "static/*.js"]
 "automeme.memes" = ["catalog/*.json"]
+"automeme.sfx" = ["catalog/*.json"]
 "automeme.studio" = [
     "static/*.html",
     "static/*.css",

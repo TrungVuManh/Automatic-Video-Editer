@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..timeline.schema import MemeEvent
+from ..timeline.schema import MemeEvent, SfxEvent, TimelineEvent
 
 # Đuôi file được coi là ảnh động (phải cho lặp) và ảnh tĩnh (phải giữ một khung hình)
 DUOI_ANH_DONG = {".gif", ".webp", ".apng"}
@@ -31,12 +31,14 @@ class RenderPlan:
     input_args: list[str]   # tham số -i của các meme, theo đúng thứ tự sự kiện
     filter_complex: str     # rỗng nếu không có sự kiện nào
     out_label: str          # nhãn luồng video ra, ví dụ "[v]"; rỗng khi không lọc gì
+    out_audio_label: str = ""  # nhãn audio đã mix SFX; rỗng thì dùng audio gốc
 
 
-def build_render_plan(events: Sequence[MemeEvent], asset_paths: Sequence[Path], *,
+def build_render_plan(events: Sequence[TimelineEvent], asset_paths: Sequence[Path], *,
                       video_w: int, video_h: int, scale_default: float,
-                      position_default: str, margin_ratio: float) -> RenderPlan:
-    """Sự kiện + đường dẫn meme → tham số input và filter_complex."""
+                      position_default: str, margin_ratio: float,
+                      has_audio: bool = True) -> RenderPlan:
+    """Sự kiện + asset → input, chuỗi overlay video và trộn SFX."""
     if len(events) != len(asset_paths):
         raise ValueError("Số sự kiện và số đường dẫn asset không khớp")
     if not events:
@@ -44,26 +46,62 @@ def build_render_plan(events: Sequence[MemeEvent], asset_paths: Sequence[Path], 
 
     le = max(0, round(video_w * margin_ratio))
     input_args: list[str] = []
-    chuan_bi: list[str] = []
+    chuan_bi_video: list[str] = []
+    chuan_bi_audio: list[str] = []
     chuoi_overlay: list[str] = []
     nhan_truoc = "[0:v]"
+    meme_rows: list[tuple[int, MemeEvent]] = []
+    sfx_labels: list[str] = []
 
-    for i, (e, asset) in enumerate(zip(events, asset_paths, strict=True)):
+    for input_index, (e, asset) in enumerate(zip(events, asset_paths, strict=True), 1):
+        if isinstance(e, SfxEvent):
+            input_args += ["-i", str(asset)]
+            label = f"[s{len(sfx_labels)}]"
+            delay_ms = max(0, round(e.start * 1000))
+            chuan_bi_audio.append(
+                f"[{input_index}:a]atrim=0:{e.duration:.3f},asetpts=PTS-STARTPTS,"
+                f"volume={e.volume:.3f},adelay={delay_ms}|{delay_ms}{label}"
+            )
+            sfx_labels.append(label)
+            continue
         input_args += input_cho_meme(asset, e.duration)
+        meme_rows.append((input_index, e))
+
+    for i, (input_index, e) in enumerate(meme_rows):
         rong = _chan(video_w * (e.scale if e.scale is not None else scale_default))
-        chuan_bi.append(f"[{i + 1}:v]scale={rong}:-2,setpts=PTS-STARTPTS+{e.start:.3f}/TB[m{i}]")
+        chuan_bi_video.append(
+            f"[{input_index}:v]scale={rong}:-2,setpts=PTS-STARTPTS+{e.start:.3f}/TB[m{i}]"
+        )
 
         x, y = vi_tri_overlay(e.position or position_default, le)
-        nhan_sau = "[v]" if i == len(events) - 1 else f"[v{i}]"
+        nhan_sau = "[v]" if i == len(meme_rows) - 1 else f"[v{i}]"
         chuoi_overlay.append(
             f"{nhan_truoc}[m{i}]overlay={x}:{y}:"
             f"enable='between(t,{e.start:.3f},{e.end:.3f})':eof_action=pass{nhan_sau}"
         )
         nhan_truoc = nhan_sau
 
-    return RenderPlan(input_args=input_args,
-                      filter_complex=";".join(chuan_bi + chuoi_overlay),
-                      out_label="[v]")
+    out_audio = ""
+    if sfx_labels:
+        mix_inputs = (["[0:a]"] if has_audio else []) + sfx_labels
+        if len(mix_inputs) == 1:
+            chuan_bi_audio.append(f"{mix_inputs[0]}anull[a]")
+        else:
+            chuan_bi_audio.append(
+                "".join(mix_inputs)
+                + f"amix=inputs={len(mix_inputs)}:duration="
+                + ("first" if has_audio else "longest")
+                + ":dropout_transition=0:normalize=0[a]"
+            )
+        out_audio = "[a]"
+
+    filters = chuan_bi_video + chuoi_overlay + chuan_bi_audio
+    return RenderPlan(
+        input_args=input_args,
+        filter_complex=";".join(filters),
+        out_label="[v]" if meme_rows else "",
+        out_audio_label=out_audio,
+    )
 
 
 def input_cho_meme(asset: Path, duration: float) -> list[str]:
