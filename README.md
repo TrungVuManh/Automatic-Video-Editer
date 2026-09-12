@@ -16,8 +16,8 @@ render trực tiếp.
 | Bước | Nội dung | Trạng thái |
 |---|---|---|
 | Stage A | Khung dự án, cấu hình + profile, log, `automeme doctor` | ✅ |
-| Iteration 1 | `automeme transcribe` → `transcript.json` | ⏳ |
-| Iteration 2 | `timeline.json` + render meme PNG/JPG/GIF | ⏳ |
+| Iteration 1 | `automeme transcribe` → `transcript.json` | ✅ |
+| Iteration 2 | `timeline.json` + render meme PNG/JPG/GIF | ✅ |
 | Iteration 3 | Ollama tìm khoảnh khắc → `analysis.json` | ⏳ |
 | Iteration 4 | Tìm + xếp hạng meme → `automeme run` | ⏳ |
 
@@ -49,7 +49,9 @@ PowerShell chặn script thì chạy một lần:
 Không muốn kích hoạt venv: gọi thẳng `.\.venv\Scripts\automeme.exe` hoặc
 `.\.venv\Scripts\python.exe -m automeme`.
 
-Nhận dạng giọng nói (cần từ Iteration 1): `python -m pip install -e ".[asr]"`.
+Nhận dạng giọng nói (cần cho `transcribe`): `python -m pip install -e ".[asr-cuda]"` khi có
+GPU NVIDIA — nhóm này kèm sẵn cuBLAS và cuDNN nên không phải cài CUDA Toolkit. Máy không có
+GPU: `python -m pip install -e ".[asr]"`.
 
 **3. Kiểm tra**
 
@@ -63,12 +65,29 @@ Mục `[ HỎNG ]` phải xử lý hết; `[THIẾU ]` là thứ chưa cần cho
 
 ```powershell
 automeme --help
-automeme doctor                    # kiểm tra môi trường
-automeme doctor --profile subtle   # kiểm tra kèm một profile
+automeme doctor                              # kiểm tra môi trường
+automeme transcribe data\input\video.mp4     # lời thoại + thời điểm từng từ
+automeme transcribe data\input\video.mp4 --force   # nhận dạng lại
 ```
 
-`transcribe`, `analyze`, `inspect`, `render`, `run` đã có tên nhưng chưa làm — chạy sẽ báo lệnh
-đó thuộc iteration nào. Mục tiêu cuối MVP (SPEC §78):
+`transcribe` cần faster-whisper: `python -m pip install -e ".[asr-cuda]"` (máy không có GPU
+NVIDIA thì dùng `".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`). Lần chạy đầu tải model khoảng 3 GB.
+Kết quả ở `data/transcripts/<tên-video>.json`; chạy lại thì bỏ qua vì đã có cache.
+
+Chèn meme theo một `timeline.json` (tự viết tay, hoặc do bước `analyze` sinh ra ở Iteration 3):
+
+```powershell
+automeme inspect data\timelines\video.timeline.json --video data\input\video.mp4
+automeme render data\input\video.mp4
+```
+
+`inspect` in bảng sự kiện, báo lỗi chặn render (thiếu file meme, meme vượt quá thời lượng video,
+hai meme cùng vị trí trùng giờ) và cảnh báo mềm (meme quá dày, quá dài). `render` ghi ra
+`data/output/<tên-video>_automeme.mp4`, giữ nguyên tiếng gốc. Cách viết timeline: xem
+[`docs/GUIDE.md`](docs/GUIDE.md) mục 5.4.
+
+`analyze` và `run` đã có tên nhưng chưa làm — chạy sẽ báo lệnh đó thuộc iteration nào.
+Mục tiêu cuối MVP (SPEC §78):
 
 ```powershell
 automeme run input.mp4 --profile funny
@@ -98,7 +117,9 @@ gửi file này khi báo lỗi.
 ```
 configs/         default.yaml + profile
 prompts/         prompt gửi LLM (từ Iteration 3)
-src/automeme/    cli, config, doctor, media/ (FFmpeg), utils/
+src/automeme/    cli, config, doctor, pipeline, workspace, media/ (FFmpeg),
+                 transcription/ (faster-whisper), timeline/ (schema + kiểm tra),
+                 rendering/ (filtergraph), utils/
 tests/           pytest — không cần GPU hay Ollama; test FFmpeg tự bỏ qua nếu máy không có
 data/            input, temp, cache, transcripts, timelines, output, logs — không commit
 assets/          memes, gifs, sfx, fonts — người dùng tự thêm, không commit

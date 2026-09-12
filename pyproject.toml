@@ -16,8 +16,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Nhận dạng giọng nói (Iteration 1) — nặng, dùng GPU NVIDIA nếu có
+# Nhận dạng giọng nói (Iteration 1). Chạy CPU thì chỉ cần [asr];
+# chạy GPU NVIDIA cần thêm cuBLAS + cuDNN 9 của CUDA 12 → dùng [asr-cuda].
 asr = ["faster-whisper>=1.0"]
+asr-cuda = [
+    "faster-whisper>=1.0",
+    "nvidia-cublas-cu12>=12.3",
+    "nvidia-cudnn-cu12>=9.1,<10",
+]
 # Backend LLM tùy chọn thay cho Ollama (llm.backend: claude)
 claude = ["anthropic>=0.40"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5"]

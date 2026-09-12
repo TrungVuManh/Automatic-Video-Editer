@@ -52,6 +52,8 @@ class WhisperSettings(_Section):
     device: Literal["cuda", "cpu", "auto"]
     compute_type: str
     beam_size: int = Field(ge=1)
+    vad_filter: bool
+    condition_on_previous_text: bool
 
 
 class LLMSettings(_Section):
@@ -82,6 +84,9 @@ class EditingSettings(_Section):
 class MemeSettings(_Section):
     duration_min: float = Field(gt=0)
     duration_max: float = Field(gt=0)
+    scale_default: float = Field(ge=0.05, le=1.0)
+    position_default: Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
+    margin_ratio: float = Field(ge=0, le=0.2)
 
     @model_validator(mode="after")
     def _min_khong_vuot_max(self) -> MemeSettings:
@@ -119,6 +124,8 @@ ENV_MAP: dict[str, tuple[str, str]] = {
     "WHISPER_DEVICE": ("whisper", "device"),
     "WHISPER_COMPUTE_TYPE": ("whisper", "compute_type"),
     "WHISPER_BEAM_SIZE": ("whisper", "beam_size"),
+    "WHISPER_VAD_FILTER": ("whisper", "vad_filter"),
+    "WHISPER_CONDITION_ON_PREVIOUS_TEXT": ("whisper", "condition_on_previous_text"),
     "LLM_BACKEND": ("llm", "backend"),
     "OLLAMA_HOST": ("ollama", "host"),
     "OLLAMA_MODEL": ("ollama", "model"),

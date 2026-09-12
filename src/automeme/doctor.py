@@ -46,10 +46,14 @@ def check_environment(settings: Settings | None, config_error: str | None = None
         else:
             rows.append((name, FAIL, "không thấy trong PATH — winget install Gyan.FFmpeg"))
 
-    rows.append(("faster-whisper", OK if _importable("faster_whisper") else WARN,
-                 "đã cài" if _importable("faster_whisper")
-                 else "chưa cài — cần từ Iteration 1: python -m pip install -e .[asr]"))
+    co_whisper = _importable("faster_whisper")
+    rows.append(("faster-whisper", OK if co_whisper else WARN,
+                 "đã cài" if co_whisper
+                 else 'chưa cài — cần cho lệnh transcribe: python -m pip install -e ".[asr-cuda]" '
+                      '(máy không có GPU: ".[asr]")'))
     rows.append(_gpu_row(settings))
+    if co_whisper and (settings is None or settings.whisper.device != "cpu"):
+        rows.append(ctranslate2_row())
 
     backend = settings.llm.backend if settings else "ollama"
     if backend == "claude":
@@ -85,6 +89,27 @@ def _gpu_row(settings: Settings | None) -> Row:
         return ("GPU NVIDIA", OK, "không có — whisper.device=cpu nên không cần")
     return ("GPU NVIDIA", WARN, "không thấy (nvidia-smi) — Whisper trên CPU rất chậm; "
                                 "nếu vẫn chạy CPU: WHISPER_DEVICE=cpu, WHISPER_COMPUTE_TYPE=int8")
+
+
+def ctranslate2_row() -> Row:
+    """CTranslate2 (lõi của faster-whisper) có thấy GPU không.
+
+    Chỉ kiểm tra được tới mức "thấy GPU"; thiếu cuDNN thì phải nạp model mới lộ ra, khi đó
+    `giai_thich_loi_model` sẽ nói rõ cách sửa.
+    """
+    try:
+        import ctranslate2
+    except ImportError:
+        return ("CTranslate2 CUDA", WARN, "chưa cài ctranslate2")
+    try:
+        so = int(ctranslate2.get_cuda_device_count())
+    except Exception as e:  # driver lỗi, build CPU-only…
+        return ("CTranslate2 CUDA", WARN, f"không hỏi được GPU: {e}")
+    if so > 0:
+        return ("CTranslate2 CUDA", OK, f"thấy {so} GPU")
+    return ("CTranslate2 CUDA", WARN,
+            'không thấy GPU — cài python -m pip install -e ".[asr-cuda]", '
+            "hoặc đặt WHISPER_DEVICE=cpu và WHISPER_COMPUTE_TYPE=int8")
 
 
 def gpu_names() -> list[str]:

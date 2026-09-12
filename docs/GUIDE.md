@@ -3,7 +3,7 @@
 > Cài đặt nhanh xem [`README.md`](../README.md). File này giải thích từng bước: cài đặt, kiểm
 > tra môi trường, cấu hình, quy trình làm video, xử lý sự cố, và cách làm việc cùng Claude Code.
 >
-> **Cập nhật: 2026-09-11 — Stage A.** Mục nào ghi *(đang xây)* sẽ được viết chi tiết khi
+> **Cập nhật: 2026-09-12 — Stage A, Iteration 1 (`transcribe`) và Iteration 2 (`inspect`, `render`).** Mục nào ghi *(đang xây)* sẽ được viết chi tiết khi
 > iteration tương ứng xong. Lộ trình đầy đủ: [`HANDOFF.md`](HANDOFF.md) mục 5.
 
 ## Mục lục
@@ -39,8 +39,9 @@ lặp, sai thời điểm); bạn **duyệt `timeline.json`** trước khi rende
 | Lệnh | Việc | Trạng thái |
 |---|---|---|
 | `automeme doctor` | Kiểm tra môi trường | ✅ dùng được |
-| `automeme transcribe` | Video → transcript | Iteration 1 |
-| `automeme render`, `automeme inspect` | Timeline → video; xem lại timeline | Iteration 2 |
+| `automeme transcribe` | Video → transcript (lời thoại + thời điểm từng từ) | ✅ dùng được |
+| `automeme inspect` | Xem lại và kiểm tra timeline | ✅ dùng được |
+| `automeme render` | Timeline → video đã chèn meme | ✅ dùng được |
 | `automeme analyze` | Transcript → khoảnh khắc nên chèn meme | Iteration 3 |
 | `automeme run` | Trọn quy trình bằng một lệnh | Iteration 4 |
 
@@ -109,7 +110,7 @@ commit `.env`** (đã có trong `.gitignore`).
 
 | Khi nào | Cần gì | Cách cài |
 |---|---|---|
-| Iteration 1 — `transcribe` | faster-whisper | `python -m pip install -e ".[asr]"`. Chạy GPU trên Windows còn cần thư viện CUDA — hướng dẫn cụ thể sẽ có khi làm Iteration 1 |
+| Lệnh `transcribe` | faster-whisper | **Có GPU NVIDIA:** `python -m pip install -e ".[asr-cuda]"` — kèm sẵn cuBLAS + cuDNN (~1 GB), không cần cài CUDA Toolkit riêng. **Không có GPU:** `python -m pip install -e ".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`, `WHISPER_COMPUTE_TYPE=int8` trong `.env` |
 | Iteration 3 — `analyze` | Ollama + model | `winget install Ollama.Ollama`, rồi `ollama pull qwen3:8b` |
 | Iteration 4 | Thư viện meme của bạn | chép file vào `assets/` — xem [5.3](#53-thư-viện-meme-iteration-4) |
 | Tùy chọn | Docker Desktop (cho Meme Search) | `winget install Docker.DockerDesktop` |
@@ -138,13 +139,14 @@ KIỂM TRA MÔI TRƯỜNG
   [  OK  ]  Python >= 3.10  3.11.9 — ...\.venv\Scripts\python.exe
   [  OK  ]  Cấu hình        profile: default
   [THIẾU ]  .env            chưa có — đang dùng giá trị mặc định; tạo: Copy-Item .env.example .env
-  [  OK  ]  ffmpeg          9.0.1-full_build-www.gyan.dev — ...
-  [THIẾU ]  faster-whisper  chưa cài — cần từ Iteration 1: python -m pip install -e .[asr]
-  [  OK  ]  GPU NVIDIA      NVIDIA GeForce RTX 4060 Laptop GPU (8188 MiB)
-  [THIẾU ]  Ollama          không kết nối được http://localhost:11434 (...); cần từ Iteration 3
+  [  OK  ]  ffmpeg            9.0.1-full_build-www.gyan.dev — ...
+  [  OK  ]  faster-whisper    đã cài
+  [  OK  ]  GPU NVIDIA        NVIDIA GeForce RTX 4060 Laptop GPU (8188 MiB)
+  [  OK  ]  CTranslate2 CUDA  thấy 1 GPU
+  [THIẾU ]  Ollama            không kết nối được http://localhost:11434 (...); cần từ Iteration 3
   ...
 Bắt buộc: tất cả đạt.
-Thiếu nhưng chưa chặn: .env, faster-whisper, Ollama
+Thiếu nhưng chưa chặn: .env, Ollama
 ```
 
 Ba mức: `[  OK  ]` đạt · `[THIẾU ]` chưa cần cho bước hiện tại · `[ HỎNG ]` phải sửa (lệnh
@@ -156,8 +158,9 @@ thoát với mã 1, dùng được trong script).
 | Cấu hình | `configs/`, profile và `.env` hợp lệ | Đọc thông báo, sửa đúng khóa bị nêu tên — xem [4.5](#45-khi-cấu-hình-sai) |
 | .env | Đã có file `.env` chưa | `Copy-Item .env.example .env` |
 | ffmpeg, ffprobe | Có trong PATH, phiên bản bao nhiêu | `winget install Gyan.FFmpeg`, mở lại terminal |
-| faster-whisper | Đã cài chưa | `python -m pip install -e ".[asr]"` (từ Iteration 1) |
+| faster-whisper | Đã cài chưa (cần cho `transcribe`) | `python -m pip install -e ".[asr-cuda]"`, hoặc `".[asr]"` nếu chạy CPU |
 | GPU NVIDIA | `nvidia-smi` có thấy GPU không | Cài driver NVIDIA. Không có GPU: `WHISPER_DEVICE=cpu`, `WHISPER_COMPUTE_TYPE=int8` |
+| CTranslate2 CUDA | Lõi của faster-whisper có dùng được GPU không (chỉ hiện khi `WHISPER_DEVICE` khác `cpu`) | Cài `".[asr-cuda]"`. Thiếu cuDNN thì tới lúc nạp model mới lộ, thông báo lỗi sẽ nói rõ cách sửa |
 | Ollama | Server ở `OLLAMA_HOST` có chạy, đã tải model chưa | Mở ứng dụng Ollama; `ollama pull <model>` |
 | Claude API | Chỉ hiện khi `LLM_BACKEND=claude`: đã cài thư viện, có key chưa | Xem [2.6](#26-cài-thêm-theo-từng-giai-đoạn) |
 | docker, git | Có trong PATH | Docker chỉ cần cho Meme Search |
@@ -185,6 +188,8 @@ nằm trong `configs/default.yaml`.
 | `WHISPER_DEVICE` | `cuda` | Không có GPU NVIDIA: `cpu` |
 | `WHISPER_COMPUTE_TYPE` | `float16` | CPU: `int8`; GPU ít VRAM: `int8_float16` |
 | `WHISPER_BEAM_SIZE` | `5` | Giảm để nhanh hơn |
+| `WHISPER_VAD_FILTER` | `true` | Đặt `false` khi giọng nói nhỏ và bị cắt mất câu |
+| `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | `false` | Đặt `true` nếu muốn Whisper dùng câu trước làm ngữ cảnh (chính xác hơn một chút nhưng dễ lặp chữ) |
 | `LLM_BACKEND` | `ollama` | `claude` để dùng Claude API |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama chạy ở máy khác |
 | `OLLAMA_MODEL` | `qwen3:8b` | GPU dưới 8 GB VRAM: `qwen3:4b` |
@@ -271,17 +276,41 @@ MVP nhắm tới video tiếng Việt **30–90 giây**, có hội thoại rõ, 
 ### 5.2 Các bước
 
 ```powershell
-automeme transcribe data\input\video.mp4    # Iteration 1: lời thoại
+automeme transcribe data\input\video.mp4    # lời thoại — đã dùng được
 automeme analyze    data\input\video.mp4    # Iteration 3: khoảnh khắc nên chèn meme
-automeme inspect    <file timeline>         # Iteration 2: xem lại trước khi render
-automeme render     data\input\video.mp4    # Iteration 2: dựng video
+automeme inspect    <file timeline>         # xem lại trước khi render — đã dùng được
+automeme render     data\input\video.mp4    # dựng video — đã dùng được
 # hoặc một lệnh cho tất cả (Iteration 4):
 automeme run data\input\video.mp4 --profile funny
 ```
 
 Mỗi bước lưu kết quả vào `data/` và **bỏ qua nếu kết quả đã có** — sửa timeline rồi render lại
-không phải chạy lại Whisper hay LLM. Muốn làm lại một bước thì xóa file kết quả của bước đó.
-Tên file cụ thể sẽ chốt ở Iteration 1.
+không phải chạy lại Whisper hay LLM. Muốn làm lại một bước thì thêm `--force`, hoặc xóa file
+kết quả của bước đó.
+
+**Lệnh `transcribe`:**
+
+```powershell
+automeme transcribe data\input\video.mp4
+automeme -v transcribe data\input\video.mp4        # log chi tiết, có phần trăm tiến độ
+automeme transcribe data\input\video.mp4 --force   # nhận dạng lại từ đầu
+```
+
+Chạy xong in ngay số đoạn, số từ và vài câu đầu để bạn kiểm tra. Ba file được tạo:
+
+| File | Ý nghĩa |
+|---|---|
+| `data/cache/<tên-video>-<hash>/audio.wav` | Audio mono 16 kHz tách từ video |
+| `data/cache/<tên-video>-<hash>/transcript-<mã>.json` | Cache theo tham số ASR — đổi model hoặc ngôn ngữ sẽ tạo file mới, không dùng nhầm bản cũ |
+| `data/transcripts/<tên-video>.json` | Bản mới nhất, các bước sau đọc file này |
+
+Nội dung transcript gồm `video`, `language`, `duration`, `model`, `segments` (mỗi câu có
+`id`, `start`, `end`, `text`) và `words` (từng từ kèm `start`, `end` — dùng để canh meme rơi
+đúng cuối câu).
+
+Lần chạy đầu tải model về `C:\Users\<bạn>\.cache\huggingface`; bản `large-v3` khoảng 3 GB.
+Muốn để ổ khác thì đặt biến môi trường `HF_HOME`. Nghe không ra chữ thì xem mục 4.2: đổi
+`WHISPER_MODEL`, hoặc tắt VAD bằng `WHISPER_VAD_FILTER=false` khi giọng nói nhỏ.
 
 | Thư mục | Chứa |
 |---|---|
@@ -302,11 +331,76 @@ khoảng 200–500 meme chia theo cảm xúc: sốc, bối rối, ngượng, fac
 §25). Chỉ dùng meme bạn có quyền dùng — repo không commit các thư mục này (SPEC §56). Cách mô
 tả từng meme (tag, cảm xúc, an toàn) sẽ chốt ở Iteration 4.
 
-### 5.4 Duyệt timeline
+### 5.4 Timeline: viết tay và duyệt
 
 `timeline.json` là "bản dựng" dạng chữ: mỗi meme có thời điểm, thời lượng, file, vị trí, cỡ.
-Bạn xóa meme, đổi thời điểm, đổi file rồi render lại mà không tốn lượt chạy AI. Định dạng chốt
-ở Iteration 2 (ví dụ tham khảo: SPEC §34).
+Bạn xóa meme, đổi thời điểm, đổi file rồi render lại mà không tốn lượt chạy AI. Từ Iteration 3
+file này do AI sinh ra; hiện tại bạn tự viết.
+
+Đặt ở `data/timelines/<tên-video>.timeline.json` (đúng tên này thì `render` tự tìm thấy):
+
+```json
+{
+  "version": 1,
+  "video": "video.mp4",
+  "events": [
+    {
+      "id": "event_001",
+      "type": "meme",
+      "start": 3.0,
+      "duration": 1.8,
+      "asset": "assets/memes/soc.png",
+      "position": "bottom-right",
+      "scale": 0.35,
+      "reason": "ghi chú cho chính bạn, không bắt buộc"
+    }
+  ]
+}
+```
+
+| Khóa | Bắt buộc | Ý nghĩa |
+|---|---|---|
+| `id` | có | Mã riêng của sự kiện, không trùng nhau |
+| `type` | không | Hiện chỉ có `meme` |
+| `start` | có | Giây, tính từ đầu video |
+| `duration` | có | Meme hiện bao lâu (giây) |
+| `asset` | có | Đường dẫn ảnh/GIF, tính từ thư mục gốc dự án (hoặc từ `assets/`) |
+| `position` | không | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`. Bỏ trống = `meme.position_default` |
+| `scale` | không | Bề rộng meme so với bề rộng video, 0.05–1.0. Bỏ trống = `meme.scale_default` (0.30) |
+| `mode` | không | Hiện chỉ có `overlay` (đè lên video) |
+| `confidence`, `query`, `reason` | không | Do bước phân tích ghi lại, để bạn hiểu vì sao có meme này |
+
+Kiểm tra trước khi render:
+
+```powershell
+automeme inspect data\timelines\video.timeline.json --video data\input\video.mp4
+```
+
+```
+TIMELINE  smoke-test.mp4  (2 sự kiện, video 00:11.68)
+  mã             bắt đầu    dài  vị trí           cỡ  asset
+  event_001     00:03.00   1.80  bottom-right    35%  assets/memes/soc.png
+  event_002     00:08.30   1.50  top-left        25%  assets/memes/soc.png
+  [cảnh báo] event_001 → event_002 chỉ cách 3.5s, dưới cooldown 7.0s
+  → hợp lệ, render được.
+```
+
+**Lỗi** (chặn render): thiếu file meme, meme kết thúc sau khi video hết, trùng mã sự kiện, hai
+meme cùng vị trí mà trùng thời gian. **Cảnh báo** (vẫn render): meme dày hơn cooldown, vượt số
+meme mỗi phút, thời lượng ngoài khoảng trong cấu hình — timeline viết tay là quyền của bạn.
+
+Render:
+
+```powershell
+automeme render data\input\video.mp4
+automeme render data\input\video.mp4 --force     # dựng lại dù đã có file cũ
+automeme render data\input\video.mp4 --timeline <file khác> --out <nơi lưu>
+```
+
+Video ra ở `data/output/<tên-video>_automeme.mp4`: cùng độ phân giải, cùng thời lượng, **giữ
+nguyên tiếng gốc**. Ảnh PNG có vùng trong suốt hiển thị đúng; GIF chạy lặp trong khoảng thời
+gian của sự kiện. Chất lượng và tốc độ encode chỉnh bằng `OUTPUT_CRF` và `OUTPUT_PRESET`
+(mục 4.2).
 
 ---
 
@@ -335,6 +429,16 @@ Bạn xóa meme, đổi thời điểm, đổi file rồi render lại mà khôn
 | Doctor: Ollama *không kết nối được* | Chưa cài hoặc chưa chạy | Cài theo [2.6](#26-cài-thêm-theo-từng-giai-đoạn), hoặc mở ứng dụng Ollama; thử `ollama list` |
 | Doctor: *chưa có qwen3:8b* | Chưa tải model | `ollama pull qwen3:8b` |
 | Lệnh báo *chưa làm — thuộc Iteration N* | Tính năng chưa xây | Xem lộ trình trong `docs/HANDOFF.md` |
+| `Chưa cài faster-whisper` | Chưa cài nhóm `asr` | `python -m pip install -e ".[asr-cuda]"`, hoặc `".[asr]"` nếu chạy CPU |
+| `Thiếu thư viện CUDA (cuDNN/cuBLAS)` | Cài `[asr]` nhưng lại chạy GPU | Cài `".[asr-cuda]"`, hoặc đặt `WHISPER_DEVICE=cpu` và `WHISPER_COMPUTE_TYPE=int8` |
+| `GPU hết VRAM` khi nạp model | Model lớn hơn VRAM còn trống | `WHISPER_COMPUTE_TYPE=int8_float16`, hoặc `WHISPER_MODEL=large-v3-turbo`; đóng ứng dụng khác đang dùng GPU |
+| Transcript trống, log báo *không nhận được câu nào* | Video không có tiếng nói, hoặc VAD cắt nhầm vì giọng quá nhỏ | Nghe thử `data/cache/.../audio.wav`; thử `WHISPER_VAD_FILTER=false` |
+| Log báo *câu ... lặp liên tiếp nhiều lần* | Whisper bị kẹt, hay gặp ở đoạn nhạc hoặc im lặng | Bật lại VAD, hoặc đổi model |
+| `Timeline sai định dạng: sự kiện #0 → ...` | Gõ sai tên khóa hoặc giá trị ngoài khoảng | Thông báo chỉ rõ sự kiện thứ mấy và khóa nào — xem bảng khóa ở [5.4](#54-timeline-viết-tay-và-duyệt) |
+| `Timeline không hợp lệ: không thấy file meme` | Sai đường dẫn `asset` | Đường dẫn tính từ thư mục gốc dự án (`assets/memes/x.png`) hoặc từ `assets/` (`memes/x.png`) |
+| `Chưa có timeline ...` | Chưa viết file timeline | Viết theo mẫu ở [5.4](#54-timeline-viết-tay-và-duyệt), hoặc chờ lệnh `analyze` ở Iteration 3 |
+| Render xong nhưng không thấy meme đâu | Thời điểm nằm ngoài đoạn đang xem, hoặc meme trùng màu nền | Trích thử khung hình: `ffmpeg -ss <giây> -i <video ra> -frames:v 1 thu.png` |
+| Log báo *Không copy được audio gốc* | Định dạng tiếng gốc không nhét được vào MP4 | Không sao — automeme tự encode lại bằng `AUDIO_CODEC` |
 
 ---
 
@@ -366,7 +470,7 @@ khi HANDOFF và SPEC mâu thuẫn, HANDOFF thắng.
 ## 9. Dành cho người phát triển
 
 ```powershell
-pytest -q                     # 73 test, không cần GPU/Ollama; test FFmpeg tự bỏ qua nếu máy thiếu
+pytest -q                     # 160 test, không cần GPU/Ollama; test FFmpeg tự bỏ qua nếu máy thiếu
 pytest --cov=automeme         # kèm độ phủ code
 ruff check src tests          # lint
 ruff check --fix src tests    # tự sửa lỗi dễ (sắp xếp import…)
@@ -377,12 +481,16 @@ src/automeme/
 ├── cli.py        lệnh automeme (Typer)
 ├── config.py     nạp + kiểm tra cấu hình
 ├── doctor.py     automeme doctor
+├── pipeline.py   nối các bước lại (transcribe_video…)
+├── workspace.py  đường dẫn output + khóa cache của từng video
 ├── media/        mọi lời gọi FFmpeg/ffprobe: ffmpeg.py, probe.py, audio.py
+├── transcription/  interface + backend faster-whisper + chuẩn hóa transcript
+├── timeline/     schema.py (định dạng timeline) + validator.py (ràng buộc cứng)
+├── rendering/    filters.py (dựng filtergraph, hàm thuần) + renderer.py (gọi FFmpeg)
 └── utils/        đường dẫn, JSON, thời gian, log
 ```
 
-Sắp thêm theo SPEC §12: `transcription/`, `analyzer/`, `memes/`, `timeline/`, `rendering/`,
-`pipeline.py`.
+Sắp thêm theo SPEC §12: `analyzer/`, `memes/`.
 
 **Quy tắc chính** (đầy đủ trong `CLAUDE.md`): logic là hàm thuần có test; FFmpeg chỉ gọi qua
 `automeme.media`, lệnh dạng list; import thư viện nặng bên trong hàm; output của LLM luôn qua

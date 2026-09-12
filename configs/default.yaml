@@ -19,6 +19,10 @@ whisper:
   device: cuda               # cuda | cpu | auto
   compute_type: float16      # float16 (GPU) | int8_float16 | int8 (CPU)
   beam_size: 5
+  vad_filter: true           # bỏ qua đoạn im lặng — nhanh hơn và đỡ bịa chữ
+  # Whisper mặc định lấy câu trước làm ngữ cảnh cho câu sau; gặp nhạc hoặc im lặng thì dễ
+  # lặp một câu mãi. Tắt đi thì mỗi đoạn độc lập, an toàn hơn với video ngắn.
+  condition_on_previous_text: false
 
 llm:
   backend: ollama            # ollama (local, mặc định) | claude (cần ANTHROPIC_API_KEY)
@@ -43,6 +47,9 @@ editing:
 meme:
   duration_min: 0.8          # giây
   duration_max: 2.5
+  scale_default: 0.30        # bề rộng meme = 30% bề rộng video (SPEC §38)
+  position_default: bottom-right   # top-left | top-right | bottom-left | bottom-right | center
+  margin_ratio: 0.03         # lề của meme, tính theo bề rộng video
 
 output:
   video_codec: libx264

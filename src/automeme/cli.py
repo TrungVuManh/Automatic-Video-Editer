@@ -9,7 +9,9 @@ from typing import Annotated, NoReturn
 
 import typer
 
-from .config import ConfigError, load_settings
+from .config import ConfigError, Settings, load_settings
+from .media.ffmpeg import CommandError
+from .utils.files import ensure_data_dirs
 from .utils.logger import add_file_log, log, setup_logging
 
 app = typer.Typer(
@@ -24,6 +26,19 @@ ProfileOpt = Annotated[
     str | None,
     typer.Option("--profile", "-p", help="Profile trong configs/: subtle, funny, chaotic…"),
 ]
+ForceOpt = Annotated[bool, typer.Option("--force", help="Làm lại dù đã có kết quả cũ.")]
+
+
+def bootstrap(profile: str | None = None) -> Settings:
+    """Nạp cấu hình theo profile, tạo thư mục data/ và bật file log. Sai cấu hình thì dừng."""
+    try:
+        settings = load_settings(profile)
+    except ConfigError as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    ensure_data_dirs(settings.paths.data_dir)
+    add_file_log(settings.paths.data_dir / "logs" / "automeme.log")
+    return settings
 
 
 @app.callback()
@@ -56,9 +71,18 @@ def doctor(profile: ProfileOpt = None) -> None:
 
 
 @app.command()
-def transcribe(video: VideoArg) -> None:
+def transcribe(video: VideoArg, profile: ProfileOpt = None, force: ForceOpt = False) -> None:
     """Video → audio.wav → transcript.json (faster-whisper)."""
-    _chua_lam("transcribe", "Iteration 1")
+    from .pipeline import transcribe_video
+    from .transcription.normalize import format_transcript_summary
+
+    settings = bootstrap(profile)
+    try:
+        path, data = transcribe_video(video, settings, force=force)
+    except (FileNotFoundError, CommandError, RuntimeError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(format_transcript_summary(data, path))
 
 
 @app.command()
@@ -68,15 +92,63 @@ def analyze(video: VideoArg) -> None:
 
 
 @app.command()
-def inspect(timeline: Annotated[Path, typer.Argument(help="File timeline.json.")]) -> None:
-    """Xem lại timeline trước khi render."""
-    _chua_lam("inspect", "Iteration 2")
+def inspect(
+    timeline: Annotated[Path, typer.Argument(help="File timeline.json.")],
+    video: Annotated[Path | None, typer.Option("--video", help="Video để kiểm tra cả thời "
+                                                              "lượng và cỡ khung.")] = None,
+    profile: ProfileOpt = None,
+) -> None:
+    """Xem lại timeline và kiểm tra trước khi render."""
+    from .media.probe import probe
+    from .timeline.schema import TimelineError, load_timeline
+    from .timeline.validator import format_timeline_table, resolve_asset, validate_timeline
+
+    settings = bootstrap(profile)
+    try:
+        tl = load_timeline(timeline)
+    except TimelineError as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+
+    thoi_luong = None
+    if video is not None:
+        try:
+            thoi_luong = probe(video).duration
+        except (CommandError, OSError) as e:
+            log.warning("Không đọc được video (%s) — bỏ qua kiểm tra thời lượng.", e)
+
+    goc = settings.paths.assets_dir.parent
+    asset_paths = {e.asset: resolve_asset(e.asset, goc, settings.paths.assets_dir)
+                   for e in tl.events}
+    loi, canh_bao = validate_timeline(tl, video_duration=thoi_luong, asset_paths=asset_paths,
+                                      meme_cfg=settings.meme, editing_cfg=settings.editing)
+    typer.echo(format_timeline_table(tl, loi, canh_bao, thoi_luong))
+    if loi:
+        raise typer.Exit(code=1)
 
 
 @app.command()
-def render(video: VideoArg) -> None:
+def render(
+    video: VideoArg,
+    timeline: Annotated[Path | None, typer.Option(
+        "--timeline", help="Timeline dùng để dựng (mặc định: data/timelines/<tên>.timeline.json).",
+    )] = None,
+    out: Annotated[Path | None, typer.Option("--out", help="Nơi lưu video ra.")] = None,
+    profile: ProfileOpt = None,
+    force: ForceOpt = False,
+) -> None:
     """Render meme vào video theo timeline.json (FFmpeg)."""
-    _chua_lam("render", "Iteration 2")
+    from .pipeline import render_timeline
+    from .timeline.schema import TimelineError
+
+    settings = bootstrap(profile)
+    try:
+        path, tl = render_timeline(video, settings, timeline_path=timeline, output=out,
+                                   force=force)
+    except (FileNotFoundError, TimelineError, CommandError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Đã chèn {len(tl.events)} meme → {path}")
 
 
 @app.command()
