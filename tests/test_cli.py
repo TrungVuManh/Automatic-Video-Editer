@@ -20,7 +20,8 @@ def test_help_liet_ke_du_lenh():
     r = runner.invoke(app, ["--help"])
     assert r.exit_code == 0
     for cmd in (
-        "doctor", "transcribe", "analyze", "inspect", "render", "review", "studio", "run",
+        "doctor", "transcribe", "analyze", "inspect", "render", "review", "studio",
+        "install-memes", "run",
     ):
         assert cmd in r.output
 
@@ -174,3 +175,20 @@ def test_studio_tao_service_va_mo_server(monkeypatch):
     assert result.exit_code == 0
     assert calls[0][1] == {"port": 0, "open_browser": False}
     assert calls[0][0].settings.editing.max_memes_per_minute == 5
+
+
+def test_install_memes_goi_bo_cai_va_in_tom_tat(monkeypatch):
+    import automeme.memes.popular as popular_module
+
+    calls = []
+    monkeypatch.setattr(
+        popular_module,
+        "install_popular_memes",
+        lambda settings, **kwargs: calls.append(kwargs) or popular_module.InstallResult(
+            total=100, installed=98, reused=2, failed=0, errors=[],
+        ),
+    )
+    result = runner.invoke(app, ["install-memes", "--limit", "100"])
+    assert result.exit_code == 0
+    assert calls == [{"limit": 100}]
+    assert "98 tải mới, 2 dùng lại" in result.output

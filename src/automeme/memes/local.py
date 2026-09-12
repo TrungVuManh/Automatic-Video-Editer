@@ -35,6 +35,42 @@ def parse_library(text: str) -> tuple[list[MemeCandidate], list[str]]:
     return candidates, warnings
 
 
+def upsert_library_candidates(path: Path, items: list[MemeCandidate]) -> None:
+    """Thêm/cập nhật metadata theo id, giữ nguyên comment và từng dòng JSON đang hỏng.
+
+    Dòng hỏng không được tự ý xóa vì có thể là phần người dùng đang sửa dở. Toàn bộ thay đổi
+    được ghi qua file `.part` rồi mới thay thế library chính.
+    """
+    path = Path(path)
+    pending = {item.id: item for item in items}
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    output: list[str] = []
+    replaced: set[str] = set()
+    for raw in lines:
+        try:
+            data = json.loads(raw) if raw.strip() and not raw.lstrip().startswith("#") else None
+        except json.JSONDecodeError:
+            data = None
+        item_id = data.get("id") if isinstance(data, dict) else None
+        if item_id in pending:
+            if item_id not in replaced:
+                output.append(_candidate_json(pending[item_id]))
+                replaced.add(item_id)
+            continue
+        output.append(raw)
+    output.extend(
+        _candidate_json(item) for item_id, item in pending.items() if item_id not in replaced
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + ".part")
+    part.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
+    part.replace(path)
+
+
+def _candidate_json(item: MemeCandidate) -> str:
+    return json.dumps(item.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"))
+
+
 def tokenize(text: str) -> set[str]:
     normalized = unicodedata.normalize("NFKD", text.casefold())
     normalized = "".join(c for c in normalized if not unicodedata.combining(c))

@@ -373,9 +373,21 @@ Toàn bộ `data/` không được commit.
 
 ### 5.3 Thư viện meme
 
-Ảnh/video đặt trong `assets/memes/`, GIF có thể đặt trong `assets/gifs/`. Nên có khoảng
-200–500 meme chia theo cảm xúc: sốc, bối rối, ngượng, facepalm, hoảng, ăn mừng… Chỉ dùng meme
-bạn có quyền dùng; media trong các thư mục này không được commit.
+Cách nhanh nhất là bấm **Kho meme → Cài bộ 100 meme** trong Studio, hoặc chạy:
+
+```powershell
+automeme install-memes             # tải đủ 100 template
+automeme install-memes --limit 50  # chỉ lấy 50 template đầu
+```
+
+Catalog cố định gồm 100 template phổ biến với taxonomy song ngữ về ngữ cảnh, cảm xúc và phong
+cách. Lệnh tải từ HTTPS `i.imgflip.com`, kiểm tra MIME/kích thước, ghi file nguyên tử và có thể
+chạy lại an toàn (file đã có được tái sử dụng). Ba template có nội dung nhạy cảm/bạo lực được
+đặt `safe=false`, nên provider không bao giờ trả chúng cho pipeline tự động.
+
+Ảnh/video riêng đặt trong `assets/memes/`, GIF có thể đặt trong `assets/gifs/`. Khi mở rộng,
+nên có khoảng 200–500 meme chia theo cảm xúc: sốc, bối rối, ngượng, facepalm, hoảng, ăn mừng…
+Media trong các thư mục này không được commit.
 
 Không bắt buộc có metadata: local provider vẫn quét `.png`, `.jpg`, `.webp`, `.gif`, `.mp4`,
 `.webm`, `.mov` và tìm theo tên file. Để kết quả tốt hơn, sao chép file mẫu rồi sửa:
@@ -385,8 +397,10 @@ Copy-Item assets\memes\library.example.jsonl assets\memes\library.jsonl
 ```
 
 Mỗi dòng là một JSON object gồm `id`, `filename`, `type`, `tags`, `emotion`, `style`,
-`description`, `intensity`, `quality`, `safe`, `language`, `usage_count`. Đặt `safe=false`
-để meme không bao giờ được chọn. Một dòng hỏng chỉ bị bỏ riêng và log chỉ rõ số dòng.
+`description`, `intensity`, `quality`, `safe`, `language`, `usage_count`, cùng `source_url` và
+`license_note` nếu có. Đặt `safe=false` để meme không bao giờ được chọn. Một dòng hỏng chỉ bị
+bỏ riêng và log chỉ rõ số dòng. Template Imgflip là nội dung do người dùng đăng; hãy đọc nguồn
+và tự kiểm tra quyền sử dụng trước khi xuất bản, nhất là nội dung thương mại.
 
 Nếu muốn tìm semantic bằng Meme Search, chạy dịch vụ trên loopback rồi tạo token có hai scope
 `search:read,media:read`:

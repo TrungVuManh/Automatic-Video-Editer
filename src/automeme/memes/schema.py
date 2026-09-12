@@ -24,3 +24,5 @@ class MemeCandidate(BaseModel):
     semantic_score: float = Field(default=0, ge=0, le=1)
     source: Literal["local", "meme-search"] = "local"
     content_url: str | None = None
+    source_url: str | None = None
+    license_note: str | None = None

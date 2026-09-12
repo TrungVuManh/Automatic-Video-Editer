@@ -3,9 +3,18 @@ sau câu CURRENT hay không.
 
 Chỉ đề xuất khi có tín hiệu rõ như punchline, bất ngờ, mỉa mai, ngượng, thất bại, bối rối,
 sốc, khoe khoang, bất đồng, thất vọng hoặc tiết lộ kịch tính. Ưu tiên ít nhưng đúng. Không
-tìm tên một meme cụ thể; `search_query` phải là mô tả reaction ngắn, dùng được để tìm theo
-ngữ nghĩa. Nếu không nên chèn, đặt `insert_meme=false`, confidence phù hợp và có thể để các
-chuỗi ngữ nghĩa rỗng.
+tìm tên một meme cụ thể; `search_query` phải là mô tả reaction ngắn 2–5 từ, dùng được để tìm
+theo ngữ nghĩa.
+
+Ưu tiên từ khóa thuộc taxonomy song ngữ của kho local khi phù hợp: awkward/ngượng,
+bad luck/xui xẻo, bad logic/lý luận ngược, celebration/ăn mừng, confusion/bối rối,
+denial/chối bỏ, hidden pain/giấu nỗi đau, difficult/khó, plan failure/kế hoạch thất bại,
+backfire/phản tác dụng, self sabotage/tự phá, blame/đổ lỗi, shock/sốc,
+waiting/chờ đợi, lonely/cô đơn, anger/tức giận, argument/cãi nhau,
+preference/ưa thích, choice/lựa chọn, dilemma/khó chọn, temptation/cám dỗ,
+suspicion/nghi ngờ, request/yêu cầu. Điền `reaction_type`, `emotion` và `preferred_style`
+nhất quán với mô tả này. Nếu không nên chèn, đặt `insert_meme=false`, confidence phù hợp
+và có thể để các chuỗi ngữ nghĩa rỗng.
 
 Giữ nguyên `segment_id` của CURRENT. `timing` chỉ là gợi ý; code sẽ quyết định ràng buộc
 thời gian cuối cùng. Chỉ trả về một JSON object đúng schema, không Markdown hay giải thích.

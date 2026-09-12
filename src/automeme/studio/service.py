@@ -4,7 +4,6 @@ Module này không phụ thuộc HTTP để các quy tắc upload, hàng đợi 
 """
 from __future__ import annotations
 
-import json
 import threading
 import time
 import uuid
@@ -16,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import Settings, list_profiles, load_settings
 from ..doctor import check_environment
-from ..memes.local import SUPPORTED, media_type
+from ..memes.local import SUPPORTED, media_type, upsert_library_candidates
 from ..memes.schema import MemeCandidate
 from ..review.service import ReviewSession, create_review_session
 from ..utils.files import CONFIGS_DIR
@@ -95,6 +94,7 @@ class StudioService:
             lambda active: check_environment(active)
         )
         self._job_lock = threading.RLock()
+        self._library_lock = threading.RLock()
         self._active_thread: threading.Thread | None = None
         self._job: JobState | None = None
         self._environment: list[tuple[str, str, str]] | None = None
@@ -247,6 +247,13 @@ class StudioService:
         self._upsert_candidate(candidate)
         return candidate
 
+    def install_popular_library(self, *, limit: int = 100) -> dict[str, Any]:
+        from ..memes.popular import install_popular_memes
+
+        with self._library_lock:
+            result = install_popular_memes(self.settings, limit=limit)
+        return result.model_dump(mode="json")
+
     def start_job(self, request: JobRequest) -> dict[str, Any]:
         video = self.video_path(request.video)
         with self._job_lock:
@@ -393,27 +400,8 @@ class StudioService:
         return candidate
 
     def _upsert_candidate(self, item: MemeCandidate) -> None:
-        path = self.settings.meme.library_file
-        lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-        output: list[str] = []
-        replaced = False
-        for raw in lines:
-            try:
-                data = json.loads(raw) if raw.strip() and not raw.lstrip().startswith("#") else None
-            except json.JSONDecodeError:
-                data = None
-            if isinstance(data, dict) and data.get("id") == item.id:
-                if not replaced:
-                    output.append(json.dumps(item.model_dump(mode="json"), ensure_ascii=False))
-                    replaced = True
-                continue
-            output.append(raw)
-        if not replaced:
-            output.append(json.dumps(item.model_dump(mode="json"), ensure_ascii=False))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        part = path.with_name(path.name + ".part")
-        part.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
-        part.replace(path)
+        with self._library_lock:
+            upsert_library_candidates(self.settings.meme.library_file, [item])
 
 
 def _stage_message(stage: str, state: str) -> str:

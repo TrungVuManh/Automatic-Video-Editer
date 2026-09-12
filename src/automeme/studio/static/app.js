@@ -144,6 +144,7 @@ function setupUploads(){
     pond.on("addfile",error=>{if(error)toast(error.main||String(error),"error");});
   }
   $("#asset-upload-button").onclick=()=>$("#asset-upload").click();
+  $("#popular-library-button").onclick=installPopularLibrary;
   $("#asset-upload").onchange=async event=>{
     const file=event.target.files[0]; if(!file)return;
     try{
@@ -297,7 +298,13 @@ function openMetadata(id){
   const item=state.library.find(row=>row.id===id);if(!item)return;
   $("#meta-id").value=item.id;$("#meta-description").value=item.description;$("#meta-tags").value=item.tags.join(", ");$("#meta-emotion").value=item.emotion.join(", ");$("#meta-style").value=item.style.join(", ");$("#meta-intensity").value=item.intensity;$("#meta-quality").value=item.quality;$("#meta-safe").checked=item.safe;
   $("#intensity-value").textContent=`${Math.round(item.intensity*100)}%`;$("#quality-value").textContent=`${Math.round(item.quality*100)}%`;
+  const source=$("#meta-source");source.classList.toggle("hidden",!item.source_url);source.textContent=item.source_url?`Nguồn: ${item.source_url} · ${item.license_note||"Hãy tự xác minh quyền sử dụng trước khi xuất bản."}`:"";
   $("#dialog-preview").innerHTML=mediaPreview(item.preview_url,item.type,item.id);$("#metadata-dialog").showModal();icons();
+}
+async function installPopularLibrary(){
+  const button=$("#popular-library-button"),old=button.innerHTML;
+  button.disabled=true;button.innerHTML='<span class="spinner"></span>Đang tải 100 meme';
+  try{const result=await api("/api/library/popular?limit=100",{method:"POST"});toast(`Kho meme: ${result.installed} tải mới, ${result.reused} dùng lại${result.failed?`, ${result.failed} lỗi`:""}.`,result.failed?"error":"success");await loadLibrary();await loadDashboard();}catch(error){toast(error.message,"error");}finally{button.disabled=false;button.innerHTML=old;icons();}
 }
 async function saveMetadata(event){
   event.preventDefault();const id=$("#meta-id").value;

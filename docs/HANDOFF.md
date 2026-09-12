@@ -26,7 +26,7 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 
 | File | Vai trò | Ghi chú |
 |---|---|---|
-| `src/automeme/cli.py` | CLI Typer | `doctor`, `transcribe`, `analyze`, `inspect`, `render`, `run` chạy được. `bootstrap(profile)` nạp cấu hình + bật file log cho mọi lệnh thật |
+| `src/automeme/cli.py` | CLI Typer | `doctor`, `install-memes`, `transcribe`, `analyze`, `inspect`, `render`, `run` chạy được. `bootstrap(profile)` nạp cấu hình + bật file log cho mọi lệnh thật |
 | `src/automeme/pipeline.py` | Nối các bước | `transcribe_video(...)`, `analyze_video(...)`, `build_video_timeline(...)`, `render_timeline(...)`, `run_video(...)`; các backend đều tiêm được để test offline |
 | `src/automeme/cache.py` | Cache/invalidation | Manifest strict, hash ổn định, nhận biết fresh/stale/file bị sửa; manifest nằm ngoài artifact người dùng chỉnh |
 | `src/automeme/analyzer/context.py` | Context window | `build_context_windows`: mặc định 2 đoạn trước + 1 đoạn sau, cấu hình được |
@@ -35,6 +35,7 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/analyzer/detector.py` | Phân tích + bộ lọc | JSON sai thử lại 1 lần rồi bỏ riêng câu; code quyết định confidence, timing, duration, cooldown, mật độ |
 | `src/automeme/analyzer/prompt.py` | Prompt manager | Nạp `prompts/meme_detector.txt`, điền context và JSON Schema, giữ UTF-8 |
 | `src/automeme/memes/local.py` | Thư viện local | Đọc `library.jsonl` theo từng dòng, tìm theo metadata/tên file, tự quét media và bỏ asset `safe=false` |
+| `src/automeme/memes/popular.py` + `catalog/` | Kho meme phổ biến | Catalog 100 template + ontology Việt–Anh; tải HTTPS có giới hạn/MIME, upsert nguyên tử, ghi nguồn và chặn 3 mục nhạy cảm khỏi auto-select |
 | `src/automeme/memes/meme_search.py` | Meme Search API v1 | Vector search qua HTTP, bearer token, fallback local; chỉ tải ứng viên đã chọn vào cache bằng file tạm |
 | `src/automeme/memes/ranker.py` | Xếp hạng | Hàm thuần kết hợp semantic, emotion, style, quality, novelty và phạt meme vừa dùng |
 | `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video |
@@ -102,6 +103,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | `automeme render` (ảnh, GIF, vùng trong suốt) | Xong | Chạy thật; trích khung hình kiểm tra meme hiện đúng lúc, đúng góc; giữ nguyên tiếng gốc |
 | `automeme analyze` (Ollama/Claude) | Xong | 18 test mới chạy offline: schema, context, retry, bộ lọc, resume, CLI và adapter |
 | Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
+| Catalog 100 meme phổ biến có nhãn | Xong | Đã tải thật 100/100; test catalog, tải/tái sử dụng, nhãn song ngữ, safe filter, CLI và Studio API |
 | Xếp hạng + dựng timeline | Xong | Test trọng số, novelty/phạt trùng, fallback ứng viên và giới hạn cuối video |
 | `automeme run` | Xong | Test toàn luồng với backend AI giả và FFmpeg thật: video → transcript → analysis → timeline → MP4 |
 | Cache/invalidation toàn pipeline | Xong | Analysis, timeline và render có input key riêng; đổi config làm mới đúng bước, timeline/output sửa ngoài được bảo vệ |
@@ -117,7 +119,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Đường chạy CPU (`WHISPER_DEVICE=cpu`) | Chưa thử; máy có GPU nên mặc định chạy GPU |
 | Chạy `automeme analyze` với model thật | Máy chưa cài ứng dụng Ollama/model `qwen3:8b`; code và SDK Python đã sẵn sàng |
 | Chạy trọn pipeline với Ollama + Meme Search thật | Máy chưa có ứng dụng/model Ollama và dịch vụ Meme Search chưa được khởi chạy; local provider vẫn dùng được |
-| Chất lượng kho meme local | Repo chỉ có một asset smoke-test; cần người dùng bổ sung metadata và media có quyền sử dụng |
+| Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
 | Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
 
@@ -129,7 +131,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **237 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **244 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -380,6 +382,7 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] Kéo-thả video + tiến trình pipeline
 - [x] Editor video/waveform/transcript
 - [x] Quản lý kho meme và metadata
+- [x] Cài catalog 100 meme có taxonomy Việt–Anh và safe filter
 - [x] Vendor OSS offline + third-party notices
 
 ---
@@ -390,7 +393,7 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - Chọn license cho code (MIT hoặc Apache-2.0) — chưa có file `LICENSE`.
 - Để chạy `analyze` thật: cài Ollama, mở server, rồi `ollama pull qwen3:8b`.
 - Chuẩn bị 1–2 video tiếng Việt 30–90 giây để chạy thật từ Iteration 1.
-- Thêm meme có quyền sử dụng vào `assets/memes/` và tạo `assets/memes/library.jsonl` từ file mẫu.
+- Rà soát quyền sử dụng của template đã cài trước khi xuất bản; thêm asset riêng có quyền nếu cần.
 - Nếu muốn semantic search: clone/chạy Meme Search trên loopback và tạo token có scope
   `search:read,media:read`; nếu không, pipeline tự dùng thư viện local.
 
@@ -400,6 +403,21 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-12 (phiên 8) — Kho 100 meme có nhãn ngữ nghĩa (Codex)
+
+**Đã làm.** Thêm catalog cố định 100 template phổ biến và lệnh `automeme install-memes`; Studio
+có nút cài trực tiếp. Mỗi mục có nhãn taxonomy Việt–Anh, alias, mô tả ngữ cảnh, emotion/style,
+intensity và quality để local search + ranker chọn theo ý nghĩa thay vì phụ thuộc tên file.
+Prompt LLM dùng cùng taxonomy để tạo query tương thích.
+
+**An toàn và nguồn.** Chỉ tải HTTPS từ `i.imgflip.com`, không theo redirect, giới hạn 15 MB,
+kiểm tra MIME và đổi tên file `.part` nguyên tử. Metadata giữ URL nguồn cùng cảnh báo UGC;
+3 template nhạy cảm đặt `safe=false`. Media tải thật nằm trong `assets/` bị gitignore.
+
+**Kiểm chứng.** Đã cài thật 100/100 (~12 MB), chạy lại tái sử dụng đủ 100 file. Test bao phủ
+catalog, năm truy vấn ngữ nghĩa Việt–Anh, safe filter, tải giả lập, CLI, API/UI Studio; Ruff,
+Node syntax và toàn bộ **244 test** đều xanh.
 
 ### 2026-09-12 (phiên 7) — AutoMeme Studio UI/UX (Codex)
 

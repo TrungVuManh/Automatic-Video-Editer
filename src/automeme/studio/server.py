@@ -125,6 +125,11 @@ class StudioHandler(BaseHTTPRequestHandler):
                 state = self.server.studio.start_job(JobRequest.model_validate(self._read_json()))
                 self._json(HTTPStatus.ACCEPTED, {"ok": True, "job": state})
                 return
+            if parsed.path == "/api/library/popular":
+                raw_limit = (query.get("limit") or ["100"])[0]
+                result = self.server.studio.install_popular_library(limit=int(raw_limit))
+                self._json(HTTPStatus.OK, {"ok": result["failed"] == 0, **result})
+                return
             if parsed.path == "/api/render":
                 output = self.server.studio.review(self._query(query, "video")).render()
                 self._json(HTTPStatus.OK, {"ok": True, "output": str(output)})

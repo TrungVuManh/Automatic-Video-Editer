@@ -135,6 +135,8 @@ def test_static_ui_co_cac_man_hinh_va_open_source():
         assert view in html
     for library in ("Plyr", "FilePond", "Sortable", "WaveSurfer"):
         assert library in html + js
+    assert "popular-library-button" in html
+    assert "/api/library/popular?limit=100" in js
     assert (STATIC_DIR / "vendor" / "licenses" / "wavesurfer.js.txt").is_file()
 
 
@@ -184,6 +186,45 @@ def test_studio_server_auth_upload_dashboard_va_job(studio):
             "Content-Length": str(len(job_body)),
         })
         assert connection.getresponse().status == 202
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_studio_server_cai_kho_meme_pho_bien(studio, monkeypatch):
+    monkeypatch.setattr(
+        studio,
+        "install_popular_library",
+        lambda *, limit: {
+            "total": limit,
+            "installed": limit,
+            "reused": 0,
+            "failed": 0,
+            "errors": [],
+        },
+    )
+    server = create_studio_server(studio, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+    try:
+        connection.request(
+            "POST",
+            "/api/library/popular?limit=100",
+            headers={"X-Automeme-Token": server.session_token},
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        assert json.loads(response.read()) == {
+            "ok": True,
+            "total": 100,
+            "installed": 100,
+            "reused": 0,
+            "failed": 0,
+            "errors": [],
+        }
     finally:
         connection.close()
         server.shutdown()

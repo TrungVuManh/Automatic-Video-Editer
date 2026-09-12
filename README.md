@@ -75,6 +75,7 @@ automeme transcribe data\input\video.mp4     # lời thoại + thời điểm t�
 automeme transcribe data\input\video.mp4 --force   # nhận dạng lại
 automeme analyze data\input\video.mp4        # transcript → analysis.json
 automeme analyze data\input\video.mp4 --force     # gọi LLM phân tích lại
+automeme install-memes                             # cài kho 100 meme có nhãn song ngữ
 automeme run data\input\video.mp4 --profile funny # chạy trọn pipeline MVP
 automeme review data\input\video.mp4               # duyệt trên giao diện web local
 automeme studio                                     # mở giao diện đầy đủ (khuyên dùng)
@@ -97,6 +98,11 @@ Frontend tận dụng các dự án mã nguồn mở đã vendoring để chạy
 SortableJS, Lucide và FilePond. Phiên bản, nguồn và giấy phép xem
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Node/npm chỉ cần khi người phát triển muốn
 dựng lại vendor bằng `npm install && npm run build:studio`; người dùng ứng dụng không cần Node.
+
+Trong trang **Kho meme**, bấm **Cài bộ 100 meme** để tải 100 template phổ biến vào máy. Có thể
+dùng CLI tương đương `automeme install-memes`. Catalog đi kèm nhãn ngữ nghĩa Việt–Anh; AI tìm
+theo reaction rồi rank theo cảm xúc, phong cách, chất lượng và độ mới. Ba template nhạy cảm
+được giữ để nhận diện nhưng đặt `safe=false`, nên không bao giờ được chọn tự động.
 
 `transcribe` cần faster-whisper: `python -m pip install -e ".[asr-cuda]"` (máy không có GPU
 NVIDIA thì dùng `".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`). Lần chạy đầu tải model khoảng 3 GB.
@@ -176,5 +182,7 @@ ruff check src tests
 
 ## Bản quyền
 
-License cho code chưa chọn (SPEC §83 gợi ý MIT hoặc Apache-2.0). Meme **không** tự động là
-mã nguồn mở: repo không kèm meme, người dùng tự thêm vào `assets/memes/` (SPEC §56).
+License cho code chưa chọn (SPEC §83 gợi ý MIT hoặc Apache-2.0). Repo không commit media meme.
+Lệnh cài tải template do người dùng đăng lên Imgflip và ghi nguồn/cảnh báo quyền sử dụng vào
+metadata; việc tải được không đồng nghĩa media là mã nguồn mở. Hãy tự kiểm tra quyền trước khi
+đăng hoặc dùng thương mại.

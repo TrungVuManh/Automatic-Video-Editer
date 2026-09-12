@@ -39,6 +39,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "automeme.review" = ["static/*.html", "static/*.css", "static/*.js"]
+"automeme.memes" = ["catalog/*.json"]
 "automeme.studio" = [
     "static/*.html",
     "static/*.css",

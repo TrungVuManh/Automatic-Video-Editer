@@ -221,6 +221,32 @@ def studio(
         raise typer.Exit(code=1) from None
 
 
+@app.command("install-memes")
+def install_memes(
+    profile: ProfileOpt = None,
+    limit: Annotated[int, typer.Option(
+        help="Số template phổ biến cần cài (1–100).", min=1, max=100,
+    )] = 100,
+) -> None:
+    """Tải bộ meme phổ biến và gắn nhãn ngữ nghĩa Việt–Anh vào thư viện local."""
+    from .memes.popular import install_popular_memes
+
+    settings = bootstrap(profile)
+    try:
+        result = install_popular_memes(settings, limit=limit)
+    except (OSError, RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(
+        f"Kho meme phổ biến: {result.installed} tải mới, {result.reused} dùng lại, "
+        f"{result.failed} lỗi / {result.total} template."
+    )
+    if result.failed:
+        for error in result.errors:
+            typer.echo(f"  - {error}")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def run(
     video: VideoArg,
