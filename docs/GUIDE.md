@@ -378,12 +378,20 @@ Cách nhanh nhất là bấm **Kho meme → Cài bộ 100 meme** trong Studio, h
 ```powershell
 automeme install-memes             # tải đủ 100 template
 automeme install-memes --limit 50  # chỉ lấy 50 template đầu
+automeme install-gifs              # tải thêm 30 reaction GIF động
+automeme install-gifs --limit 15   # chỉ lấy 15 GIF đầu
 ```
 
 Catalog cố định gồm 100 template phổ biến với taxonomy song ngữ về ngữ cảnh, cảm xúc và phong
 cách. Lệnh tải từ HTTPS `i.imgflip.com`, kiểm tra MIME/kích thước, ghi file nguyên tử và có thể
 chạy lại an toàn (file đã có được tái sử dụng). Ba template có nội dung nhạy cảm/bạo lực được
 đặt `safe=false`, nên provider không bao giờ trả chúng cho pipeline tự động.
+
+Bộ GIF dùng URL `raw.githubusercontent.com` được ghim vào SHA commit của hai kho nguồn. Trình
+cài kiểm tra host/repository/revision allowlist, MIME `image/gif`, giới hạn 15 MB và phân tích
+cấu trúc để chắc chắn file có ít nhất hai frame. Hai GIF có phụ đề thô tục hoặc nhân vật chính
+trị được cài để người dùng có thể xem, nhưng đặt `safe=false`. Khi LLM trả
+`preferred_style="animated"`, ranker cộng điểm phong cách cho các GIF này.
 
 Ảnh/video riêng đặt trong `assets/memes/`, GIF có thể đặt trong `assets/gifs/`. Khi mở rộng,
 nên có khoảng 200–500 meme chia theo cảm xúc: sốc, bối rối, ngượng, facepalm, hoảng, ăn mừng…

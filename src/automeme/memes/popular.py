@@ -495,4 +495,46 @@ SEMANTICS: dict[str, dict[str, Any]] = {
         "style": ["exaggeration", "reaction"],
         "intensity": 0.5,
     },
+    "anticipation": {
+        "tags": ["cannot wait", "anticipation", "mong chờ", "háo hức", "sắp tới"],
+        "emotion": ["excitement", "impatience", "háo hức"],
+        "style": ["reaction", "animated"],
+        "intensity": 0.65,
+    },
+    "attention": {
+        "tags": ["listen", "attention", "pay attention", "lắng nghe", "chú ý"],
+        "emotion": ["curiosity", "serious", "tập trung"],
+        "style": ["reaction", "dialogue"],
+        "intensity": 0.45,
+    },
+    "gratitude": {
+        "tags": ["thanks", "thank you", "grateful", "cảm ơn", "biết ơn"],
+        "emotion": ["gratitude", "joy", "biết ơn"],
+        "style": ["reaction", "wholesome"],
+        "intensity": 0.5,
+    },
+    "greeting": {
+        "tags": ["hello", "welcome", "wave", "xin chào", "chào đón", "vẫy tay"],
+        "emotion": ["friendly", "joy", "thân thiện"],
+        "style": ["reaction", "wholesome"],
+        "intensity": 0.45,
+    },
+    "laughter": {
+        "tags": ["laughing", "lol", "wheeze", "cười", "buồn cười", "cười lăn"],
+        "emotion": ["amusement", "joy", "vui vẻ"],
+        "style": ["reaction", "animated"],
+        "intensity": 0.75,
+    },
+    "uncertainty": {
+        "tags": ["maybe", "shrug", "not sure", "có lẽ", "không chắc", "nhún vai"],
+        "emotion": ["uncertainty", "confusion", "phân vân"],
+        "style": ["reaction", "silent"],
+        "intensity": 0.4,
+    },
+    "working": {
+        "tags": ["typing", "working", "busy", "gõ phím", "làm việc", "bận rộn"],
+        "emotion": ["focus", "urgency", "tập trung"],
+        "style": ["reaction", "animated"],
+        "intensity": 0.55,
+    },
 }

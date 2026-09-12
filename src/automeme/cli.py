@@ -247,6 +247,32 @@ def install_memes(
         raise typer.Exit(code=1)
 
 
+@app.command("install-gifs")
+def install_gifs(
+    profile: ProfileOpt = None,
+    limit: Annotated[int, typer.Option(
+        help="Số reaction GIF cần cài (1–30).", min=1, max=30,
+    )] = 30,
+) -> None:
+    """Tải reaction GIF động có nhãn Việt–Anh từ các kho GitHub đã ghim commit."""
+    from .memes.animated import install_animated_gifs
+
+    settings = bootstrap(profile)
+    try:
+        result = install_animated_gifs(settings, limit=limit)
+    except (OSError, RuntimeError, ValueError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(
+        f"Kho GIF động: {result.installed} tải mới, {result.reused} dùng lại, "
+        f"{result.failed} lỗi / {result.total} GIF."
+    )
+    if result.failed:
+        for error in result.errors:
+            typer.echo(f"  - {error}")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def run(
     video: VideoArg,

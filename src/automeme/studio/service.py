@@ -254,6 +254,13 @@ class StudioService:
             result = install_popular_memes(self.settings, limit=limit)
         return result.model_dump(mode="json")
 
+    def install_animated_library(self, *, limit: int = 30) -> dict[str, Any]:
+        from ..memes.animated import install_animated_gifs
+
+        with self._library_lock:
+            result = install_animated_gifs(self.settings, limit=limit)
+        return result.model_dump(mode="json")
+
     def start_job(self, request: JobRequest) -> dict[str, Any]:
         video = self.video_path(request.video)
         with self._job_lock:

@@ -130,6 +130,11 @@ class StudioHandler(BaseHTTPRequestHandler):
                 result = self.server.studio.install_popular_library(limit=int(raw_limit))
                 self._json(HTTPStatus.OK, {"ok": result["failed"] == 0, **result})
                 return
+            if parsed.path == "/api/library/animated":
+                raw_limit = (query.get("limit") or ["30"])[0]
+                result = self.server.studio.install_animated_library(limit=int(raw_limit))
+                self._json(HTTPStatus.OK, {"ok": result["failed"] == 0, **result})
+                return
             if parsed.path == "/api/render":
                 output = self.server.studio.review(self._query(query, "video")).render()
                 self._json(HTTPStatus.OK, {"ok": True, "output": str(output)})

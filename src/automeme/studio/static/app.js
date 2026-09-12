@@ -145,6 +145,7 @@ function setupUploads(){
   }
   $("#asset-upload-button").onclick=()=>$("#asset-upload").click();
   $("#popular-library-button").onclick=installPopularLibrary;
+  $("#animated-library-button").onclick=installAnimatedLibrary;
   $("#asset-upload").onchange=async event=>{
     const file=event.target.files[0]; if(!file)return;
     try{
@@ -305,6 +306,11 @@ async function installPopularLibrary(){
   const button=$("#popular-library-button"),old=button.innerHTML;
   button.disabled=true;button.innerHTML='<span class="spinner"></span>Đang tải 100 meme';
   try{const result=await api("/api/library/popular?limit=100",{method:"POST"});toast(`Kho meme: ${result.installed} tải mới, ${result.reused} dùng lại${result.failed?`, ${result.failed} lỗi`:""}.`,result.failed?"error":"success");await loadLibrary();await loadDashboard();}catch(error){toast(error.message,"error");}finally{button.disabled=false;button.innerHTML=old;icons();}
+}
+async function installAnimatedLibrary(){
+  const button=$("#animated-library-button"),old=button.innerHTML;
+  button.disabled=true;button.innerHTML='<span class="spinner"></span>Đang tải 30 GIF';
+  try{const result=await api("/api/library/animated?limit=30",{method:"POST"});toast(`Kho GIF: ${result.installed} tải mới, ${result.reused} dùng lại${result.failed?`, ${result.failed} lỗi`:""}.`,result.failed?"error":"success");await loadLibrary();await loadDashboard();}catch(error){toast(error.message,"error");}finally{button.disabled=false;button.innerHTML=old;icons();}
 }
 async function saveMetadata(event){
   event.preventDefault();const id=$("#meta-id").value;

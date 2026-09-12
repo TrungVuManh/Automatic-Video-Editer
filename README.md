@@ -76,6 +76,7 @@ automeme transcribe data\input\video.mp4 --force   # nhận dạng lại
 automeme analyze data\input\video.mp4        # transcript → analysis.json
 automeme analyze data\input\video.mp4 --force     # gọi LLM phân tích lại
 automeme install-memes                             # cài kho 100 meme có nhãn song ngữ
+automeme install-gifs                              # cài thêm 30 reaction GIF động
 automeme run data\input\video.mp4 --profile funny # chạy trọn pipeline MVP
 automeme review data\input\video.mp4               # duyệt trên giao diện web local
 automeme studio                                     # mở giao diện đầy đủ (khuyên dùng)
@@ -103,6 +104,11 @@ Trong trang **Kho meme**, bấm **Cài bộ 100 meme** để tải 100 template 
 dùng CLI tương đương `automeme install-memes`. Catalog đi kèm nhãn ngữ nghĩa Việt–Anh; AI tìm
 theo reaction rồi rank theo cảm xúc, phong cách, chất lượng và độ mới. Ba template nhạy cảm
 được giữ để nhận diện nhưng đặt `safe=false`, nên không bao giờ được chọn tự động.
+
+Bấm **Cài 30 GIF động** hoặc chạy `automeme install-gifs` để thêm reaction chuyển động. GIF
+được lấy từ hai kho GitHub, ghim theo commit, kiểm tra đúng MIME và có ít nhất hai frame trước
+khi đưa vào thư viện. Prompt AI đặt style `animated` cho phản ứng cần chuyển động để ranker ưu
+tiên GIF; 2 GIF có chữ thô tục/nhân vật chính trị mặc định `safe=false`.
 
 `transcribe` cần faster-whisper: `python -m pip install -e ".[asr-cuda]"` (máy không có GPU
 NVIDIA thì dùng `".[asr]"` rồi đặt `WHISPER_DEVICE=cpu`). Lần chạy đầu tải model khoảng 3 GB.

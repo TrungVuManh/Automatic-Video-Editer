@@ -21,7 +21,7 @@ def test_help_liet_ke_du_lenh():
     assert r.exit_code == 0
     for cmd in (
         "doctor", "transcribe", "analyze", "inspect", "render", "review", "studio",
-        "install-memes", "run",
+        "install-memes", "install-gifs", "run",
     ):
         assert cmd in r.output
 
@@ -192,3 +192,20 @@ def test_install_memes_goi_bo_cai_va_in_tom_tat(monkeypatch):
     assert result.exit_code == 0
     assert calls == [{"limit": 100}]
     assert "98 tải mới, 2 dùng lại" in result.output
+
+
+def test_install_gifs_goi_bo_cai_va_in_tom_tat(monkeypatch):
+    import automeme.memes.animated as animated_module
+
+    calls = []
+    monkeypatch.setattr(
+        animated_module,
+        "install_animated_gifs",
+        lambda settings, **kwargs: calls.append(kwargs) or animated_module.InstallResult(
+            total=30, installed=27, reused=3, failed=0, errors=[],
+        ),
+    )
+    result = runner.invoke(app, ["install-gifs", "--limit", "30"])
+    assert result.exit_code == 0
+    assert calls == [{"limit": 30}]
+    assert "27 tải mới, 3 dùng lại" in result.output

@@ -16,6 +16,11 @@ suspicion/nghi ngờ, request/yêu cầu. Điền `reaction_type`, `emotion` và
 nhất quán với mô tả này. Nếu không nên chèn, đặt `insert_meme=false`, confidence phù hợp
 và có thể để các chuỗi ngữ nghĩa rỗng.
 
+Khi khoảnh khắc cần chuyển động để tăng lực biểu cảm (cười lớn, vỗ tay, nhảy ăn mừng,
+nhún vai, gõ phím, nhìn quanh), đặt `preferred_style="animated"` để ưu tiên reaction GIF.
+Với khoảnh khắc cần đọc bố cục/chữ hoặc so sánh nhiều ô, ưu tiên `reaction`, `comparison`
+hoặc `multi-panel` thay vì GIF.
+
 Giữ nguyên `segment_id` của CURRENT. `timing` chỉ là gợi ý; code sẽ quyết định ràng buộc
 thời gian cuối cùng. Chỉ trả về một JSON object đúng schema, không Markdown hay giải thích.
 

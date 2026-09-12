@@ -137,6 +137,8 @@ def test_static_ui_co_cac_man_hinh_va_open_source():
         assert library in html + js
     assert "popular-library-button" in html
     assert "/api/library/popular?limit=100" in js
+    assert "animated-library-button" in html
+    assert "/api/library/animated?limit=30" in js
     assert (STATIC_DIR / "vendor" / "licenses" / "wavesurfer.js.txt").is_file()
 
 
@@ -225,6 +227,38 @@ def test_studio_server_cai_kho_meme_pho_bien(studio, monkeypatch):
             "failed": 0,
             "errors": [],
         }
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_studio_server_cai_kho_gif_dong(studio, monkeypatch):
+    monkeypatch.setattr(
+        studio,
+        "install_animated_library",
+        lambda *, limit: {
+            "total": limit,
+            "installed": limit,
+            "reused": 0,
+            "failed": 0,
+            "errors": [],
+        },
+    )
+    server = create_studio_server(studio, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+    try:
+        connection.request(
+            "POST",
+            "/api/library/animated?limit=30",
+            headers={"X-Automeme-Token": server.session_token},
+        )
+        response = connection.getresponse()
+        assert response.status == 200
+        assert json.loads(response.read())["installed"] == 30
     finally:
         connection.close()
         server.shutdown()
