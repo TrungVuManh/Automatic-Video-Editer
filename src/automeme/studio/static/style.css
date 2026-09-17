@@ -89,3 +89,17 @@ h1,h2,h3,p { margin-top: 0; }.hero h1 { margin: 16px 0 14px; font-size: clamp(36
 @media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;left:-260px;width:244px;transition:.22s}.sidebar.open{left:0;box-shadow:30px 0 80px #000}.mobile-menu{display:inline-grid}.topbar{padding:0 18px}.breadcrumbs>span,.system-pill{display:none}.workspace{padding:20px}.hero{grid-template-columns:1fr}.hero-visual{display:none}.hero-copy{padding:35px}.stats-grid{grid-template-columns:1fr}.create-layout,.editor-layout{grid-template-columns:1fr}.editor-view.active{margin:-20px}.inspector{min-height:480px}.library-grid{grid-template-columns:repeat(3,1fr)}.environment-list{grid-template-columns:1fr}}
 @media(max-width:620px){.workspace{padding:14px}.hero-copy{padding:28px 23px}.hero h1{font-size:36px}.hero-actions,.page-heading,.section-heading{align-items:stretch;flex-direction:column}.project-grid,.library-grid{grid-template-columns:1fr 1fr}.create-main,.job-panel{padding:20px}.library-tools{align-items:stretch;flex-wrap:wrap}.library-tools .search-box{width:100%}.library-tools>span{margin-left:0}.toolbar-actions .save-state,.toolbar-actions .ghost{display:none}.editor-view.active{margin:-14px}.preview-column{padding:9px}.form-grid,.range-grid{grid-template-columns:1fr}.asset-preview{height:120px}}
 .asset-preview audio,.dialog-preview audio,.event-preview audio{width:calc(100% - 22px)}
+
+/* Tải video từ YouTube (bước 01 của Tạo video) */
+.youtube-import{margin-top:18px}
+.or-divider{display:flex;align-items:center;gap:12px;margin-bottom:14px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.or-divider::before,.or-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.youtube-import label{display:grid;gap:6px}
+.youtube-import label>span{font-size:9px;color:#aeb6c4;font-weight:700}
+.youtube-import input{width:100%;border:1px solid var(--line);border-radius:9px;background:#0c1016;color:var(--text);padding:10px 11px;outline:0;font-size:11px}
+.youtube-import input:focus{border-color:var(--accent)}
+.youtube-row{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end;margin-top:10px}
+.youtube-row .button{height:38px}
+.youtube-note{display:flex;gap:7px;align-items:flex-start;margin-top:10px;color:var(--muted);font-size:9px;line-height:1.5}
+.youtube-note svg{width:13px;flex:none;color:var(--amber)}
+@media(max-width:620px){.youtube-row{grid-template-columns:1fr 1fr}.youtube-row .button{grid-column:1/-1}}

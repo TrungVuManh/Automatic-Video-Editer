@@ -39,6 +39,15 @@ class JobRequest(BaseModel):
     force: bool = False
 
 
+class DownloadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2000)
+    start: str | None = Field(default=None, max_length=32)
+    end: str | None = Field(default=None, max_length=32)
+    force: bool = False
+
+
 class MetadataPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -59,6 +68,8 @@ class JobState(BaseModel):
     id: str
     video: str
     profile: str
+    kind: Literal["pipeline", "download"] = "pipeline"
+    percent: float | None = None
     status: Literal["queued", "running", "completed", "failed"] = "queued"
     stage: str = "waiting"
     completed_stages: list[str] = Field(default_factory=list)
@@ -71,6 +82,10 @@ class JobState(BaseModel):
 
 PipelineRunner = Callable[
     [Path, Settings, bool, Callable[[str, str], None]], tuple[Path, Any]
+]
+# (yêu cầu tải, cấu hình, báo tiến độ(phần trăm | None, câu mô tả)) → DownloadResult
+Downloader = Callable[
+    [DownloadRequest, Settings, Callable[[float | None, str], None]], Any
 ]
 
 
@@ -85,10 +100,12 @@ class StudioService:
         runner: PipelineRunner | None = None,
         profiles_dir: Path = CONFIGS_DIR,
         environment_checker: Callable[[Settings], list[tuple[str, str, str]]] | None = None,
+        downloader: Downloader | None = None,
     ):
         self.settings = settings
         self._settings_loader = settings_loader or (lambda profile: load_settings(profile))
         self._runner = runner or self._run_pipeline
+        self._downloader = downloader or self._run_download
         self.profiles_dir = Path(profiles_dir)
         self._environment_checker = environment_checker or (
             lambda active: check_environment(active)
@@ -282,19 +299,28 @@ class StudioService:
 
     def start_job(self, request: JobRequest) -> dict[str, Any]:
         video = self.video_path(request.video)
+        job = JobState(id=uuid.uuid4().hex[:12], video=video.name, profile=request.profile)
+        return self._launch(job, self._execute_job, (video, request))
+
+    def start_download(self, request: DownloadRequest) -> dict[str, Any]:
+        """Tải video YouTube vào data/input/ ở nền; dùng chung hàng đợi một job với pipeline."""
+        from ..media.youtube import DownloadError, parse_youtube_url
+
+        try:
+            video_id = parse_youtube_url(request.url)  # link sai thì báo ngay, không tạo job
+        except DownloadError as exc:
+            raise StudioError(str(exc)) from None
+        job = JobState(id=uuid.uuid4().hex[:12], video=f"YouTube {video_id}", profile="default",
+                       kind="download", message="Đang chờ tải video")
+        return self._launch(job, self._execute_download, (request,))
+
+    def _launch(self, job: JobState, target: Callable[..., None], args: tuple) -> dict[str, Any]:
         with self._job_lock:
             if self._active_thread is not None and self._active_thread.is_alive():
-                raise StudioError("Đang có một video được xử lý. Hãy chờ job hiện tại hoàn tất.")
-            self._job = JobState(
-                id=uuid.uuid4().hex[:12],
-                video=video.name,
-                profile=request.profile,
-            )
+                raise StudioError("Đang có một việc được xử lý. Hãy chờ việc hiện tại hoàn tất.")
+            self._job = job
             thread = threading.Thread(
-                target=self._execute_job,
-                args=(video, request),
-                name=f"automeme-{self._job.id}",
-                daemon=True,
+                target=target, args=args, name=f"automeme-{job.id}", daemon=True,
             )
             self._active_thread = thread
             thread.start()
@@ -362,6 +388,52 @@ class StudioService:
                 self._job.message = "Pipeline đã dừng"
                 self._job.error = str(exc)
                 self._job.finished_at = time.time()
+
+    def _execute_download(self, request: DownloadRequest) -> None:
+        with self._job_lock:
+            assert self._job is not None
+            self._job.status = "running"
+            self._job.stage = "download"
+            self._job.started_at = time.time()
+            self._job.message = "Đang đọc thông tin video"
+
+        def progress(percent: float | None, message: str) -> None:
+            with self._job_lock:
+                assert self._job is not None
+                self._job.message = message
+                if percent is not None:
+                    self._job.percent = round(percent, 1)
+
+        try:
+            result = self._downloader(request, self.settings, progress)
+            with self._job_lock:
+                assert self._job is not None
+                self._job.status = "completed"
+                self._job.stage = "completed"
+                self._job.video = result.path.name
+                self._job.output = str(result.path)
+                self._job.percent = 100.0
+                self._job.message = (f"Đã có sẵn {result.path.name}" if result.skipped
+                                     else f"Đã tải xong {result.path.name}")
+                self._job.finished_at = time.time()
+        except Exception as exc:  # lỗi đã được dịch sang tiếng Việt ở download_youtube
+            with self._job_lock:
+                assert self._job is not None
+                self._job.status = "failed"
+                self._job.message = "Không tải được video"
+                self._job.error = str(exc)
+                self._job.finished_at = time.time()
+
+    @staticmethod
+    def _run_download(
+        request: DownloadRequest,
+        settings: Settings,
+        progress: Callable[[float | None, str], None],
+    ) -> Any:
+        from ..media.youtube import download_youtube
+
+        return download_youtube(request.url, settings, start=request.start, end=request.end,
+                                force=request.force, progress=progress)
 
     @staticmethod
     def _run_pipeline(

@@ -15,7 +15,7 @@ const profileInfo = {
 const state = {
   dashboard:null, selectedVideo:null, selectedProfile:"default", currentProject:null,
   selectedEvent:null, library:[], libraryFilter:"all", player:null, wave:null, regions:null,
-  poller:null,
+  poller:null, handledJob:null,
 };
 
 const $ = (selector, root=document) => root.querySelector(selector);
@@ -94,7 +94,7 @@ function renderDashboard(data){
   $("span:last-child",pill).textContent=failures?"Hệ thống cần sửa":warnings?"Có cảnh báo":"Hệ thống sẵn sàng";
   const root=$("#recent-projects");
   root.innerHTML=data.projects.length?data.projects.slice(0,6).map(projectCard).join(""):`<div class="empty-state"><i data-lucide="film"></i><p>Chưa có dự án. Hãy nhập video đầu tiên.</p><button class="button primary" data-go="create">Tạo video mới</button></div>`;
-  bindProjectCards(); renderProfiles(data.profiles); renderEnvironment(data.environment); updateJob(data.job); icons();
+  bindProjectCards(); renderProfiles(data.profiles); renderEnvironment(data.environment); updateJob(data.job,{silent:true}); icons();
 }
 
 function bindProjectCards(){
@@ -165,21 +165,46 @@ async function startJob(){
   }catch(error){toast(error.message,"error");}
 }
 
-function updateJob(job){
+async function startYoutubeDownload(){
+  const url=$("#youtube-url").value.trim();
+  if(!url){toast("Hãy dán link YouTube trước.","error");$("#youtube-url").focus();return;}
+  const body={url,start:$("#youtube-from").value.trim()||null,end:$("#youtube-to").value.trim()||null};
+  try{
+    const data=await api("/api/videos/youtube",{method:"POST",body});
+    updateJob(data.job); toast("Đang tải video từ YouTube"); beginPolling();
+  }catch(error){toast(error.message,"error");}
+}
+
+function updateJob(job,{silent=false}={}){
   if(!job)return;
-  $("#job-title").textContent=job.status==="completed"?"Video đã sẵn sàng":job.status==="failed"?"Pipeline cần chú ý":job.video;
+  const download=job.kind==="download";
+  $("#job-title").textContent=download
+    ?(job.status==="completed"?"Đã tải video":job.status==="failed"?"Tải video cần chú ý":"Đang tải từ YouTube")
+    :(job.status==="completed"?"Video đã sẵn sàng":job.status==="failed"?"Pipeline cần chú ý":job.video);
   $("#job-message span").textContent=job.error||job.message;
   $("#job-message").classList.toggle("error",job.status==="failed");
   $$("#pipeline-steps [data-stage]").forEach(row=>{
     row.classList.toggle("done",job.completed_stages.includes(row.dataset.stage));
     row.classList.toggle("running",job.status==="running"&&job.stage===row.dataset.stage);
   });
-  if(job.status==="running"||job.status==="queued") beginPolling();
-  if(job.status==="completed"){
-    clearInterval(state.poller);state.poller=null;loadDashboard();
+  if(job.status==="running"||job.status==="queued"){beginPolling();return;}
+  // Việc khi job kết thúc chỉ chạy MỘT lần cho mỗi job. Trước đây updateJob → loadDashboard →
+  // renderDashboard → updateJob lặp vô hạn khi job cuối đã xong (gọi API và hiện toast liên tục).
+  const key=`${job.id}:${job.status}`;
+  const polling=Boolean(state.poller);
+  clearInterval(state.poller);state.poller=null;
+  if(state.handledJob===key)return;
+  if(silent&&!polling){state.handledJob=key;return;}  // mở trang lại: không báo job cũ
+  state.handledJob=key;
+  if(job.status!=="completed")return;
+  if(download){
+    loadDashboard().then(()=>selectProject(state.dashboard?.projects.find(item=>item.name===job.video)));
+    $("#youtube-url").value="";
+    toast("Đã tải video — chọn phong cách rồi bấm Bắt đầu xử lý.");
+  }else{
+    loadDashboard();
     toast("Pipeline hoàn tất — mở Biên tập để duyệt timeline.");
   }
-  if(job.status==="failed"){clearInterval(state.poller);state.poller=null;}
 }
 
 function beginPolling(){
@@ -338,6 +363,8 @@ function bindEvents(){
   $("#mobile-menu").onclick=()=>$("#sidebar").classList.toggle("open");
   $("#refresh-button").onclick=()=>loadDashboard(true);$("#refresh-environment").onclick=()=>loadDashboard(true);
   $("#start-job").onclick=startJob;$("#render-button").onclick=renderProject;
+  $("#youtube-download").onclick=startYoutubeDownload;
+  $("#youtube-url").onkeydown=event=>{if(event.key==="Enter")startYoutubeDownload();};
   $("#library-search").oninput=renderLibrary;
   $$("[data-filter]").forEach(button=>button.onclick=()=>{state.libraryFilter=button.dataset.filter;$$('[data-filter]').forEach(item=>item.classList.toggle("active",item===button));renderLibrary();});
   $$(".inspector-tabs button").forEach(button=>button.onclick=()=>{$$(".inspector-tabs button").forEach(item=>item.classList.toggle("active",item===button));$("#event-inspector").classList.toggle("hidden",button.dataset.tab!=="event");$("#transcript-panel").classList.toggle("hidden",button.dataset.tab!=="transcript");});

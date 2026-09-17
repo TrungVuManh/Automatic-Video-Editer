@@ -87,6 +87,16 @@
                 <div><strong id="selected-name"></strong><small id="selected-meta"></small></div>
                 <i data-lucide="circle-check-big" class="success-icon"></i>
               </div>
+              <div class="youtube-import">
+                <div class="or-divider"><span>hoặc tải từ YouTube</span></div>
+                <label class="youtube-link"><span>Link video</span><input type="url" id="youtube-url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false"></label>
+                <div class="youtube-row">
+                  <label><span>Từ (tùy chọn)</span><input id="youtube-from" placeholder="0:00" autocomplete="off"></label>
+                  <label><span>Đến (tùy chọn)</span><input id="youtube-to" placeholder="1:30" autocomplete="off"></label>
+                  <button class="button ghost" id="youtube-download" type="button"><i data-lucide="download"></i>Tải về</button>
+                </div>
+                <small class="youtube-note"><i data-lucide="shield-alert"></i><span>Chỉ tải video bạn có quyền sử dụng. Video dài hơn 10 phút cần chọn đoạn. Nguồn và giấy phép được lưu kèm video.</span></small>
+              </div>
               <div class="divider"></div>
               <div class="step-label"><span>02</span><div><strong>Chọn phong cách</strong><small>Điều chỉnh độ dày và nhịp xuất hiện của meme</small></div></div>
               <div class="profile-cards" id="profile-cards"></div>

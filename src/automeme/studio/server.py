@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from ..review.service import EventPatch, ReviewError
 from ..timeline.schema import TimelineError
 from ..utils.logger import log
-from .service import JobRequest, MetadataPatch, StudioError, StudioService
+from .service import DownloadRequest, JobRequest, MetadataPatch, StudioError, StudioService
 
 STATIC_DIR = Path(__file__).with_name("static")
 MAX_JSON_BYTES = 64 * 1024
@@ -120,6 +120,12 @@ class StudioHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "item": item.model_dump(mode="json"),
                 })
+                return
+            if parsed.path == "/api/videos/youtube":
+                state = self.server.studio.start_download(
+                    DownloadRequest.model_validate(self._read_json()),
+                )
+                self._json(HTTPStatus.ACCEPTED, {"ok": True, "job": state})
                 return
             if parsed.path == "/api/jobs":
                 state = self.server.studio.start_job(JobRequest.model_validate(self._read_json()))
