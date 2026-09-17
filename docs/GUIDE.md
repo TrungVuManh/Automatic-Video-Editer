@@ -165,7 +165,7 @@ thoát với mã 1, dùng được trong script).
 | Ollama | Server ở `OLLAMA_HOST` có chạy, đã tải model chưa | Mở ứng dụng Ollama; `ollama pull <model>` |
 | Claude API | Chỉ hiện khi `LLM_BACKEND=claude`: đã cài thư viện, có key chưa | Xem [2.6](#26-cài-thêm-theo-từng-giai-đoạn) |
 | yt-dlp | Đã cài chưa, có quá 90 ngày tuổi không | `python -m pip install -U yt-dlp` — YouTube đổi liên tục nên bản cũ hay hỏng |
-| JS runtime | Có Deno/Node/Bun và gói `yt-dlp-ejs` để giải thử thách của YouTube | Thiếu thì vẫn tải được nhưng có thể chậm/thiếu định dạng. Cài Deno: `winget install DenoLand.Deno` |
+| JS runtime | Có Deno/Node/Bun, có gói `yt-dlp-ejs` và gói này **khớp đúng** bản yt-dlp yêu cầu | Thiếu runtime: `winget install DenoLand.Deno`. Thiếu hoặc lệch `yt-dlp-ejs`: chạy lệnh `pip install "yt-dlp-ejs==…"` mà dòng này in ra |
 | docker, git | Có trong PATH | Docker chỉ cần cho Meme Search |
 | Console UTF-8 | Console hiển thị được tiếng Việt | `setx PYTHONUTF8 1`, mở terminal mới |
 
@@ -307,11 +307,26 @@ automeme run "https://youtu.be/..." --from 1:20 --to 2:40 --profile funny   # t�
 > quyền dùng. Nếu video không ghi giấy phép Creative Commons, automeme vẫn tải nhưng cảnh báo;
 > giấy phép được lưu trong `.source.json` để bạn kiểm tra lại trước khi đăng.
 
-> **JS runtime:** YouTube bắt trình tải giải thử thách bằng JavaScript. automeme tự dùng Deno,
-> Node hoặc Bun nếu máy có (`download.js_runtime: auto`). Thiếu runtime hoặc thiếu script giải
-> thử thách (gói `yt-dlp-ejs`) thì vẫn tải được nhưng có thể chậm hoặc thiếu định dạng —
-> `automeme doctor` báo dòng **JS runtime**. YouTube thay đổi thường xuyên; khi tải bắt đầu lỗi,
-> việc đầu tiên nên làm là `python -m pip install -U yt-dlp`.
+> **JS runtime:** YouTube bắt trình tải giải thử thách bằng JavaScript. Cần hai thứ: một runtime
+> (automeme tự dùng Deno, Node hoặc Bun nếu máy có — `download.js_runtime: auto`) và gói script
+> `yt-dlp-ejs` (cài sẵn cùng automeme). Thiếu một trong hai thì vẫn tải được nhưng YouTube có thể
+> bóp tốc độ hoặc ẩn bớt định dạng; `automeme doctor` báo ở dòng **JS runtime**.
+
+> **Cập nhật khi tải bắt đầu lỗi:** YouTube thay đổi thường xuyên. Chạy
+> `python -m pip install -U yt-dlp`, rồi `automeme doctor`: nếu dòng **JS runtime** báo
+> `yt-dlp-ejs … không khớp`, chạy đúng lệnh cài mà nó in ra (script phải khớp đúng bản yt-dlp).
+
+**Tải lại livestream của bạn:**
+
+- Bản ghi livestream thường dài hàng giờ, nên luôn tải **một đoạn**: mở VOD, tìm khoảnh khắc
+  muốn dựng, ghi mốc thời gian rồi dùng `--from/--to` (ví dụ `--from 1:02:30 --to 1:04:00`).
+  Chỉ đoạn đó được tải, không phải cả buổi stream.
+- Ngay sau khi live kết thúc, YouTube còn **xử lý bản ghi** (vài chục phút tới vài giờ). Lúc đó
+  automeme báo "Buổi live vừa kết thúc…" — đợi xử lý xong rồi tải lại.
+- VOD để chế độ **Không công khai** tải được bằng link; để **Riêng tư** thì không (cần đăng nhập,
+  chưa hỗ trợ).
+- Video của chính bạn thường không ghi giấy phép Creative Commons nên sẽ có dòng cảnh báo bản
+  quyền — với nội dung của bạn thì có thể bỏ qua.
 
 ### 5.2 Các bước
 
@@ -649,7 +664,9 @@ cùng meme trong vòng 60 giây bị trừ thêm 0,30 điểm.
 | `Video dài …, vượt giới hạn` | Video hoặc đoạn dài hơn `download.max_duration` | Chọn đoạn bằng `--from/--to` (Studio: ô Từ/Đến), hoặc tăng giới hạn trong `configs/` |
 | `Video ở chế độ riêng tư` / `giới hạn độ tuổi` / `hội viên kênh` | Video cần đăng nhập | Chưa hỗ trợ đăng nhập/cookie — dùng video công khai |
 | `YouTube vừa thay đổi cách phát video` / `HTTP Error 403` | yt-dlp đã cũ so với YouTube | `python -m pip install -U yt-dlp` rồi thử lại |
-| Log yt-dlp báo `n challenge solving failed` | Thiếu script giải thử thách | Vẫn tải được nhưng có thể chậm — xem dòng JS runtime trong `automeme doctor` |
+| Log yt-dlp báo `n challenge solving failed` | Thiếu JS runtime, thiếu gói `yt-dlp-ejs`, hoặc `yt-dlp-ejs` lệch bản với yt-dlp | Chạy `automeme doctor`, làm theo lệnh ở dòng JS runtime |
+| `Buổi live vừa kết thúc, YouTube đang xử lý bản ghi` | VOD chưa xử lý xong | Đợi rồi tải lại; trong lúc đó YouTube thường chỉ cho tải vài giờ cuối |
+| `Buổi live vẫn đang phát` | Link trỏ tới live đang diễn ra | Đợi kết thúc và xử lý xong bản ghi |
 | `Cấu hình không hợp lệ` | Giá trị sai trong `configs/` hoặc `.env` | Đọc tên khóa trong thông báo — xem [4.5](#45-khi-cấu-hình-sai) |
 | `Không có profile 'x'` | Sai tên hoặc chưa tạo file | Thông báo có liệt kê profile đang có |
 | `No such option: -v` | Đặt `-v` sau tên lệnh | `automeme -v <lệnh>` |

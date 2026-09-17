@@ -17,6 +17,9 @@ dependencies = [
     # Tải video YouTube (Unlicense). YouTube đổi liên tục nên cần cập nhật thường xuyên:
     # python -m pip install -U yt-dlp
     "yt-dlp>=2026.8.19",
+    # Script giải thử thách JavaScript của YouTube. Phiên bản phải KHỚP ĐÚNG bản mà yt-dlp đang
+    # cài yêu cầu — `automeme doctor` đọc yêu cầu đó và in lệnh cài chính xác khi bị lệch.
+    "yt-dlp-ejs>=0.8.0",
 ]
 
 [project.optional-dependencies]

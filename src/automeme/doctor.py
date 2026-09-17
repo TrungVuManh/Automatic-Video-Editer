@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -142,11 +143,43 @@ def yt_dlp_row(today: date | None = None) -> Row:
     return ("yt-dlp", OK, ban)
 
 
-def js_runtime_row(preference: str, solver_available: bool | None = None) -> Row:
+_TU_DO = object()  # giá trị mặc định: tự dò trên máy (test truyền giá trị cụ thể)
+
+
+def ejs_pin_from_requirements(requirements: list[str] | None) -> str | None:
+    """Bản `yt-dlp-ejs` mà yt-dlp ghim, đọc từ metadata: "yt-dlp-ejs==0.8.0; extra == …"."""
+    for requirement in requirements or []:
+        match = re.match(r"^yt-dlp-ejs\s*==\s*([\w.]+)", requirement.strip())
+        if match:
+            return match.group(1)
+    return None
+
+
+def _package_version(name: str) -> str | None:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        return None
+
+
+def _expected_ejs_version() -> str | None:
+    from importlib.metadata import PackageNotFoundError, requires
+
+    try:
+        return ejs_pin_from_requirements(requires("yt-dlp"))
+    except PackageNotFoundError:
+        return None
+
+
+def js_runtime_row(preference: str, solver_version: Any = _TU_DO,
+                   expected_solver: Any = _TU_DO) -> Row:
     """JS runtime + script giải thử thách (gói `yt-dlp-ejs`) cho yt-dlp tải YouTube.
 
     Có runtime mà thiếu script thì yt-dlp vẫn tải được nhưng báo "n challenge solving failed":
-    YouTube có thể bóp tốc độ hoặc ẩn bớt định dạng (đã gặp khi nghiệm thu 2026-09-17).
+    YouTube có thể bóp tốc độ hoặc ẩn bớt định dạng (đã gặp khi nghiệm thu 2026-09-17). Script
+    phải đúng bản yt-dlp ghim — cập nhật yt-dlp mà không cập nhật script thì lại hỏng lặng lẽ.
     """
     from .media.youtube import pick_js_runtime
 
@@ -158,12 +191,19 @@ def js_runtime_row(preference: str, solver_available: bool | None = None) -> Row
         can = "deno/node/bun" if preference == "auto" else preference
         return ("JS runtime", WARN, f"không thấy {can} — tải YouTube có thể thiếu định dạng; "
                                     "cài Deno: winget install DenoLand.Deno")
-    if solver_available is None:
-        solver_available = _importable("yt_dlp_ejs")
-    if not solver_available:
+    if solver_version is _TU_DO:
+        solver_version = _package_version("yt-dlp-ejs")
+    if expected_solver is _TU_DO:
+        expected_solver = _expected_ejs_version()
+    lenh = f'python -m pip install "yt-dlp-ejs=={expected_solver}"' if expected_solver else (
+        "python -m pip install -e .")
+    if solver_version is None:
         return ("JS runtime", WARN, f"có {chon[0]} nhưng thiếu script giải thử thách (gói "
-                                    "yt-dlp-ejs) — YouTube có thể bóp tốc độ hoặc thiếu định dạng")
-    return ("JS runtime", OK, f"{chon[0]} — {chon[1]} + yt-dlp-ejs")
+                                    f"yt-dlp-ejs) — YouTube có thể bóp tốc độ; cài: {lenh}")
+    if expected_solver and solver_version != expected_solver:
+        return ("JS runtime", WARN, f"yt-dlp-ejs {solver_version} không khớp bản yt-dlp cần "
+                                    f"({expected_solver}) — chạy: {lenh}")
+    return ("JS runtime", OK, f"{chon[0]} — {chon[1]} + yt-dlp-ejs {solver_version}")
 
 
 def gpu_names() -> list[str]:

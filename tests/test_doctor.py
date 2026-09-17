@@ -105,10 +105,23 @@ def test_js_runtime_row(monkeypatch):
     from automeme.doctor import js_runtime_row
 
     monkeypatch.setattr(youtube, "pick_js_runtime", lambda pref: ("node", "C:/node.exe"))
-    assert js_runtime_row("auto", solver_available=True) == (
-        "JS runtime", OK, "node — C:/node.exe + yt-dlp-ejs")
-    thieu_script = js_runtime_row("auto", solver_available=False)
-    assert thieu_script[1] == WARN and "yt-dlp-ejs" in thieu_script[2]
+    assert js_runtime_row("auto", solver_version="0.8.0", expected_solver="0.8.0") == (
+        "JS runtime", OK, "node — C:/node.exe + yt-dlp-ejs 0.8.0")
+    thieu_script = js_runtime_row("auto", solver_version=None, expected_solver="0.8.0")
+    assert thieu_script[1] == WARN and 'yt-dlp-ejs==0.8.0' in thieu_script[2]
+    # cập nhật yt-dlp mà quên script → phải báo lệch kèm lệnh cài đúng bản
+    lech = js_runtime_row("auto", solver_version="0.8.0", expected_solver="0.9.1")
+    assert lech[1] == WARN and "không khớp" in lech[2] and 'yt-dlp-ejs==0.9.1' in lech[2]
     monkeypatch.setattr(youtube, "pick_js_runtime", lambda pref: None)
     assert js_runtime_row("auto")[1] == WARN and "DenoLand.Deno" in js_runtime_row("auto")[2]
     assert js_runtime_row("none")[1] == WARN
+
+
+def test_doc_ban_ejs_ma_yt_dlp_ghim():
+    from automeme.doctor import ejs_pin_from_requirements
+
+    reqs = ["brotli; extra == 'default'", "yt-dlp-ejs==0.8.0; extra == 'default'"]
+    assert ejs_pin_from_requirements(reqs) == "0.8.0"
+    assert ejs_pin_from_requirements(["yt-dlp-ejs == 1.2.3"]) == "1.2.3"
+    assert ejs_pin_from_requirements(["requests"]) is None
+    assert ejs_pin_from_requirements(None) is None

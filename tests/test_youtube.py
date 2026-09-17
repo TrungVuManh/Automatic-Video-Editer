@@ -110,10 +110,21 @@ def test_doan_qua_dai_bi_chan(settings):
         check_limits({"duration": 3600}, Section(0, 1200), settings.download)
 
 
-@pytest.mark.parametrize("info", [{"is_live": True}, {"live_status": "is_upcoming"}])
-def test_livestream_bi_chan(info, settings):
-    with pytest.raises(DownloadError, match="trực tiếp"):
+@pytest.mark.parametrize("info, loi", [
+    ({"is_live": True}, "vẫn đang phát"),
+    ({"live_status": "is_live"}, "vẫn đang phát"),
+    ({"live_status": "is_upcoming"}, "chưa bắt đầu"),
+    ({"live_status": "post_live"}, "đang xử lý bản ghi"),
+])
+def test_livestream_chua_tai_duoc_bao_dung_ly_do(info, loi, settings):
+    with pytest.raises(DownloadError, match=loi):
         check_limits(info, None, settings.download)
+
+
+def test_ban_ghi_live_da_xu_ly_xong_thi_tai_duoc(settings):
+    # VOD livestream dài vài giờ: được tải nếu chọn đoạn
+    check_limits({"live_status": "was_live", "duration": 3 * 3600}, Section(3600, 3690),
+                 settings.download)
 
 
 # ------------------------------------------------------------------ JS runtime + tùy chọn

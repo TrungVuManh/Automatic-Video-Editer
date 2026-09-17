@@ -18,8 +18,9 @@ Các thư viện trên chỉ được dùng ở frontend; runtime Python của `
 | Thành phần | Phiên bản tối thiểu | Giấy phép | Nguồn |
 |---|---:|---|---|
 | yt-dlp | 2026.8.19 | Unlicense (public domain) | https://github.com/yt-dlp/yt-dlp |
+| yt-dlp-ejs | 0.8.0 | Unlicense; kèm thành phần MIT (astring) và ISC (meriyah) | https://github.com/yt-dlp/ejs |
 
-yt-dlp được cài như một phụ thuộc pip (khai báo trong `pyproject.toml`), không được sao chép vào
+yt-dlp và yt-dlp-ejs (script giải thử thách JavaScript của YouTube) được cài như phụ thuộc pip (khai báo trong `pyproject.toml`), không được sao chép vào
 repository. Video tải về nằm trong `data/input/` và bị `.gitignore` loại khỏi repository; giấy
 phép của từng video được ghi trong file `.source.json` đi kèm. Điều khoản của YouTube hạn chế việc
 tải video — người dùng tự chịu trách nhiệm chỉ tải nội dung mình có quyền sử dụng.

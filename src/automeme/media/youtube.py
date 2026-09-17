@@ -163,8 +163,17 @@ def parse_section(start: str | None, end: str | None, *,
 
 def check_limits(info: dict[str, Any], section: Section | None, cfg: DownloadSettings) -> None:
     """Chặn trước khi tải: livestream, video/đoạn quá dài so với `download.max_duration`."""
-    if info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming", "post_live"):
-        raise DownloadError("Video đang phát trực tiếp hoặc chưa công chiếu — chưa hỗ trợ tải.")
+    trang_thai = info.get("live_status")
+    if info.get("is_live") or trang_thai == "is_live":
+        raise DownloadError("Buổi live vẫn đang phát. Đợi kết thúc và YouTube xử lý xong bản ghi "
+                            "rồi tải lại.")
+    if trang_thai == "is_upcoming":
+        raise DownloadError("Buổi live/công chiếu chưa bắt đầu — chưa có gì để tải.")
+    if trang_thai == "post_live":
+        # Ngay sau khi live kết thúc, YouTube còn xử lý bản ghi; tải lúc này có thể thiếu hoặc
+        # chỉ lấy được vài giờ cuối.
+        raise DownloadError("Buổi live vừa kết thúc, YouTube đang xử lý bản ghi. Đợi xử lý xong "
+                            "(thường vài chục phút tới vài giờ, tùy độ dài) rồi tải lại.")
     duration = info.get("duration")
     if section is not None:
         if section.duration > cfg.max_duration:

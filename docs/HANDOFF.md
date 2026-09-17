@@ -131,7 +131,6 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Tìm kiếm local hiểu từ đồng nghĩa | Local provider so khớp chữ: "tiết lộ" không khớp "bị nói trúng", nên khi nghiệm thu meme lý tưởng (Monkey Puppet) chưa được chọn. Hướng xử lý: Meme Search (vector), hoặc mở rộng truy vấn bằng ontology Việt–Anh sẵn có — cần người dùng chọn |
 | Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
-| Script giải thử thách YouTube (gói `yt-dlp-ejs`) | Có Node nhưng thiếu script → yt-dlp báo "n challenge solving failed": vẫn tải đủ 1080p nhưng có thể bị bóp tốc độ/thiếu định dạng. **Chờ người dùng chọn:** cài `yt-dlp-ejs`, hoặc bật `remote_components=["ejs:github"]` |
 | Tải video cần đăng nhập (riêng tư, giới hạn tuổi, hội viên) | Chưa hỗ trợ cookie — báo lỗi rõ |
 | Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
@@ -144,7 +143,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **351 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **355 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -155,8 +154,10 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
   dựng từ Python 3.11.9. **Venv không được kích hoạt sẵn**: gọi qua `.venv\Scripts\...`.
 - FFmpeg 9.0.1 (winget), GPU RTX 4060 Laptop **8 GB VRAM**, Docker, gh, git.
 - **Đã có SDK Python:** `ollama==0.6.2`, `anthropic==1.4.0`.
-- **JS runtime cho yt-dlp:** có Node.js (`C:\Program Files\nodejs`), chưa có Deno/Bun, chưa có
-  gói `yt-dlp-ejs`.
+- **JS runtime cho yt-dlp:** có Node.js (`C:\Program Files\nodejs`), chưa có Deno/Bun;
+  `yt-dlp-ejs 0.8.0` đã cài (2026-09-17), khớp yt-dlp 2026.8.19.
+- **Người dùng chỉ tải lại livestream của chính mình** (xác nhận 2026-09-17) — không vướng bản
+  quyền; bản ghi dài hàng giờ nên luôn tải theo đoạn.
 - **Đã có (kiểm tra 2026-09-17):** ứng dụng Ollama 0.34.0 (chưa tự chạy khi mở máy — cần mở app
   hoặc `ollama serve`) và model `qwen3:8b` 5,2 GB. **Chưa có:** file `.env`.
 - **Ổ C chỉ còn ~9,6 GB trống** (model Whisper/HF cache và Ollama đều nằm ở C). Nếu tải thêm
@@ -233,6 +234,13 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 
 - Công cụ: **yt-dlp** (Unlicense), khai báo là phụ thuộc chính trong `pyproject.toml`; JS runtime
   tự chọn deno → node → bun (`download.js_runtime: auto`).
+- Script giải thử thách: người dùng chọn cài gói **`yt-dlp-ejs`** (không dùng
+  `remote_components` tải script lúc chạy). yt-dlp ghim **đúng** một bản ejs, nên
+  `pyproject.toml` chỉ ghi `>=0.8.0` còn `doctor` đọc bản yt-dlp ghim (`importlib.metadata.requires`)
+  và báo lệch kèm lệnh cài chính xác. Không dùng `yt-dlp[default]` vì kéo thêm 7 gói ngoài phạm vi
+  đã duyệt.
+- Livestream: `is_live`, `is_upcoming`, `post_live` (vừa kết thúc, đang xử lý bản ghi) bị chặn với
+  thông báo riêng từng trường hợp; `was_live` tải bình thường.
 - **Chỉ nhận link YouTube**, chuẩn hóa về `https://www.youtube.com/watch?v=<id>` trước khi đưa
   cho yt-dlp (bỏ `list=` và tham số lạ, `noplaylist`). Lý do: extractor "generic" của yt-dlp tải
   được URL bất kỳ, nên Studio nhận mọi URL thì có thể bị lợi dụng tải từ mạng nội bộ.
@@ -482,8 +490,14 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - Tên file ban đầu xấu ("…4k---official-blender-foundat-…") → gộp gạch nối, cắt tại ranh giới chữ.
 - Tải theo đoạn không có phần trăm (yt-dlp cắt bằng FFmpeg) → thêm dòng trạng thái "Đang tải đoạn…".
 
-**Còn tồn tại.** Chọn cách bổ sung script giải thử thách (xem "Chưa làm được"); chưa hỗ trợ video
-cần đăng nhập; chưa chạy trọn pipeline trên video tải về có lời thoại tiếng Việt.
+**Bổ sung cuối phiên** (người dùng: chỉ tải livestream của chính mình, "tiếp tục"): cài
+`yt-dlp-ejs 0.8.0`; tải lại đoạn 1:00–1:20 → hết cảnh báo "n challenge", 15,6 s cả quy trình
+(trước 17 s). `doctor` kiểm tra ejs khớp bản yt-dlp ghim. Thông báo riêng cho live đang phát /
+chưa bắt đầu / vừa kết thúc. GUIDE thêm mục tải lại livestream. 351 → **355 test**.
+
+**Còn tồn tại.** Chưa hỗ trợ video cần đăng nhập (VOD riêng tư); chưa chạy trọn pipeline trên
+livestream tiếng Việt thật của người dùng; mỗi lần tải video của chính người dùng vẫn hiện cảnh
+báo "không phải Creative Commons" (cân nhắc cấu hình danh sách kênh của mình).
 
 ### 2026-09-17 (phiên 11) — Nghiệm thu với model thật + sửa tìm kiếm tiếng Việt (Claude Code)
 
