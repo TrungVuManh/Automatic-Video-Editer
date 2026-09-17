@@ -135,6 +135,13 @@ class RankingSettings(_Section):
         return self
 
 
+class DownloadSettings(_Section):
+    max_height: int = Field(ge=144, le=4320)
+    max_duration: float = Field(gt=0)
+    max_filesize_mb: int = Field(ge=1)
+    js_runtime: Literal["auto", "deno", "node", "bun", "none"]
+
+
 class OutputSettings(_Section):
     video_codec: str
     audio_codec: str
@@ -155,6 +162,7 @@ class Settings(_Section):
     meme: MemeSettings
     sfx: SfxSettings
     ranking: RankingSettings
+    download: DownloadSettings
     output: OutputSettings
 
 

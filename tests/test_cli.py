@@ -209,3 +209,71 @@ def test_install_gifs_goi_bo_cai_va_in_tom_tat(monkeypatch):
     assert result.exit_code == 0
     assert calls == [{"limit": 30}]
     assert "27 tải mới, 3 dùng lại" in result.output
+
+
+# ------------------------------------------------------------------ tải YouTube
+def _ket_qua_tai(tmp_path, *, cc=True):
+    from automeme.media.youtube import DownloadResult
+
+    return DownloadResult(path=tmp_path / "phim-aqz-KE-bpKQ-30s-60s.mp4", skipped=False, source={
+        "title": "Big Buck Bunny", "channel": "Blender", "section": {"start": 30, "end": 60},
+        "license": "Creative Commons Attribution" if cc else None, "creative_commons": cc,
+    })
+
+
+def test_download_tai_va_in_tom_tat(monkeypatch, tmp_path):
+    import automeme.media.youtube as youtube
+
+    goi = {}
+
+    def gia(url, settings, **kw):
+        goi.update(url=url, **kw)
+        return _ket_qua_tai(tmp_path, cc=False)
+
+    monkeypatch.setattr(youtube, "download_youtube", gia)
+    r = runner.invoke(app, ["download", "https://youtu.be/aqz-KE-bpKQ", "--from", "0:30",
+                            "--to", "1:00"])
+    assert r.exit_code == 0, r.output
+    assert goi["start"] == "0:30" and goi["end"] == "1:00" and goi["force"] is False
+    assert "Đã tải:" in r.output and "00:30.00 → 01:00.00" in r.output
+    assert "không ghi giấy phép Creative Commons" in r.output
+    assert "Tiếp theo: automeme run" in r.output
+
+
+def test_download_loi_bao_ro_va_thoat_ma_1(monkeypatch):
+    import automeme.media.youtube as youtube
+
+    def no(url, settings, **kw):
+        raise youtube.DownloadError("Video ở chế độ riêng tư — không tải được.")
+
+    monkeypatch.setattr(youtube, "download_youtube", no)
+    r = runner.invoke(app, ["download", "https://youtu.be/aqz-KE-bpKQ"])
+    assert r.exit_code == 1 and "riêng tư" in r.output
+
+
+def test_run_nhan_link_youtube_thi_tai_truoc_roi_chay(monkeypatch, tmp_path):
+    import automeme.media.youtube as youtube
+    import automeme.pipeline as pipeline
+    from automeme.timeline.schema import Timeline
+
+    ket_qua = _ket_qua_tai(tmp_path)
+    goi = {}
+    monkeypatch.setattr(youtube, "download_youtube",
+                        lambda url, settings, **kw: goi.update(tai=(url, kw)) or ket_qua)
+
+    def chay(video, settings, **kw):
+        goi["video"] = video
+        return tmp_path / "out.mp4", Timeline(video=video.name, events=[])
+
+    monkeypatch.setattr(pipeline, "run_video", chay)
+    r = runner.invoke(app, ["run", "youtu.be/aqz-KE-bpKQ", "--from", "0:30", "--to", "1:00"])
+    assert r.exit_code == 0, r.output
+    assert goi["tai"][1]["start"] == "0:30" and goi["video"] == ket_qua.path
+
+
+def test_run_file_co_san_kem_from_to_thi_bao_loi(monkeypatch):
+    import automeme.pipeline as pipeline
+
+    monkeypatch.setattr(pipeline, "run_video", lambda *a, **k: pytest.fail("không được chạy"))
+    r = runner.invoke(app, ["run", "v.mp4", "--from", "0:30"])
+    assert r.exit_code == 1 and "chỉ dùng với link YouTube" in r.output

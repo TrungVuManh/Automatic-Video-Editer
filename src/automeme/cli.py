@@ -1,6 +1,7 @@
 """CLI `automeme` (Typer) — SPEC §44–45."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -299,19 +300,81 @@ def install_sfx(
         raise typer.Exit(code=1)
 
 
+FromOpt = Annotated[str | None, typer.Option(
+    "--from", help="Chỉ tải đoạn từ thời điểm này, ví dụ 1:20 (chỉ dùng với link YouTube).")]
+ToOpt = Annotated[str | None, typer.Option(
+    "--to", help="Tải tới thời điểm này, ví dụ 2:40 (chỉ dùng với link YouTube).")]
+
+
+def _cli_progress() -> Callable[[float | None, str], None]:
+    """In tiến độ tải theo từng nấc 10% để log không bị ngập."""
+    trang_thai = {"nac": -1, "tin": ""}
+
+    def bao(percent: float | None, message: str) -> None:
+        if percent is None:
+            if message != trang_thai["tin"]:
+                log.info("%s", message)
+                trang_thai["tin"] = message
+            return
+        nac = int(percent // 10)
+        if nac != trang_thai["nac"]:
+            trang_thai["nac"] = nac
+            log.info("%s", message)
+
+    return bao
+
+
+@app.command()
+def download(
+    url: Annotated[str, typer.Argument(help="Link YouTube: watch?v=…, youtu.be/…, shorts/…")],
+    start: FromOpt = None,
+    end: ToOpt = None,
+    profile: ProfileOpt = None,
+    force: ForceOpt = False,
+) -> None:
+    """Tải video YouTube (hoặc một đoạn) vào data/input/ bằng yt-dlp."""
+    from .media.youtube import DownloadError, download_youtube, format_download_summary
+
+    settings = bootstrap(profile)
+    try:
+        result = download_youtube(url, settings, start=start, end=end, force=force,
+                                  progress=_cli_progress())
+    except (DownloadError, CommandError) as e:
+        log.error("%s", e)
+        raise typer.Exit(code=1) from None
+    typer.echo(format_download_summary(result))
+
+
 @app.command()
 def run(
-    video: VideoArg,
+    source: Annotated[str, typer.Argument(
+        help="Video đầu vào (.mp4, .mov, .mkv) hoặc link YouTube.")],
     profile: ProfileOpt = None,
     out: Annotated[Path | None, typer.Option("--out", help="Nơi lưu video ra.")] = None,
     force: ForceOpt = False,
+    start: FromOpt = None,
+    end: ToOpt = None,
 ) -> None:
-    """Chạy trọn pipeline: transcribe → AI chọn meme/SFX → timeline → render."""
+    """Chạy trọn pipeline: (tải YouTube) → transcribe → AI chọn meme/SFX → timeline → render."""
     from .analyzer.schema import AnalysisError
+    from .media.youtube import DownloadError, download_youtube, is_youtube_link
     from .pipeline import run_video
     from .timeline.schema import TimelineError
 
     settings = bootstrap(profile)
+    if is_youtube_link(source):
+        try:
+            video = download_youtube(source, settings, start=start, end=end,
+                                     progress=_cli_progress()).path
+        except (DownloadError, CommandError) as e:
+            log.error("%s", e)
+            raise typer.Exit(code=1) from None
+    elif start or end:
+        log.error("--from/--to chỉ dùng với link YouTube. Muốn cắt video có sẵn, hãy cắt trước "
+                  "bằng trình dựng video hoặc FFmpeg.")
+        raise typer.Exit(code=1)
+    else:
+        video = Path(source)
     try:
         output, timeline = run_video(video, settings, force=force, output=out)
     except (FileNotFoundError, AnalysisError, TimelineError, CommandError,

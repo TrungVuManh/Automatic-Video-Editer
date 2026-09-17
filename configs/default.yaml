@@ -77,6 +77,13 @@ ranking:
   duplicate_penalty: 0.30
   recent_window: 60          # giây — phạt nếu cùng meme vừa được dùng (SPEC §31)
 
+download:
+  # Tải video YouTube bằng yt-dlp: `automeme download <link>` hoặc `automeme run <link>`.
+  max_height: 1080           # độ phân giải dọc tối đa; cao hơn chỉ tốn dung lượng
+  max_duration: 600          # giây — video/đoạn dài hơn thì phải chọn --from/--to
+  max_filesize_mb: 1024
+  js_runtime: auto           # auto | deno | node | bun | none — YouTube cần JS runtime để giải mã
+
 output:
   video_codec: libx264
   audio_codec: aac

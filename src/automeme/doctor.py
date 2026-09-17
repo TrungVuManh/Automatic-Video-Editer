@@ -10,6 +10,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from datetime import date
 from typing import Any
 
 from .config import Settings, read_env
@@ -61,6 +62,9 @@ def check_environment(settings: Settings | None, config_error: str | None = None
     elif settings:
         rows.append(ollama_status(settings.ollama.host, settings.ollama.model))
 
+    rows.append(yt_dlp_row())
+    rows.append(js_runtime_row(settings.download.js_runtime if settings else "auto"))
+
     for name, note in (("docker", "chỉ cần khi dùng Meme Search"),
                        ("git", "quản lý phiên bản")):
         exe = which(name)
@@ -110,6 +114,56 @@ def ctranslate2_row() -> Row:
     return ("CTranslate2 CUDA", WARN,
             'không thấy GPU — cài python -m pip install -e ".[asr-cuda]", '
             "hoặc đặt WHISPER_DEVICE=cpu và WHISPER_COMPUTE_TYPE=int8")
+
+
+YT_DLP_TUOI_TOI_DA = 90  # ngày — cùng ngưỡng cảnh báo "outdated" của chính yt-dlp
+
+
+def yt_dlp_age_days(version: str, today: date) -> int | None:
+    """Phiên bản yt-dlp đặt theo ngày phát hành ("2026.8.19") → số ngày tuổi, hoặc None."""
+    try:
+        year, month, day = (int(part) for part in version.split(".")[:3])
+        return (today - date(year, month, day)).days
+    except (ValueError, TypeError):
+        return None
+
+
+def yt_dlp_row(today: date | None = None) -> Row:
+    """yt-dlp đã cài chưa và có quá cũ không — YouTube đổi liên tục, bản cũ hay hỏng."""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+        ban = version("yt-dlp")
+    except PackageNotFoundError:
+        return ("yt-dlp", WARN, "chưa cài — cần cho lệnh download: python -m pip install -e .")
+    tuoi = yt_dlp_age_days(ban, today or date.today())
+    if tuoi is not None and tuoi > YT_DLP_TUOI_TOI_DA:
+        return ("yt-dlp", WARN, f"{ban} đã {tuoi} ngày tuổi — YouTube hay đổi, nên cập nhật: "
+                                "python -m pip install -U yt-dlp")
+    return ("yt-dlp", OK, ban)
+
+
+def js_runtime_row(preference: str, solver_available: bool | None = None) -> Row:
+    """JS runtime + script giải thử thách (gói `yt-dlp-ejs`) cho yt-dlp tải YouTube.
+
+    Có runtime mà thiếu script thì yt-dlp vẫn tải được nhưng báo "n challenge solving failed":
+    YouTube có thể bóp tốc độ hoặc ẩn bớt định dạng (đã gặp khi nghiệm thu 2026-09-17).
+    """
+    from .media.youtube import pick_js_runtime
+
+    if preference == "none":
+        return ("JS runtime", WARN, "đã tắt (download.js_runtime=none) — YouTube có thể thiếu "
+                                    "định dạng video")
+    chon = pick_js_runtime(preference)
+    if chon is None:
+        can = "deno/node/bun" if preference == "auto" else preference
+        return ("JS runtime", WARN, f"không thấy {can} — tải YouTube có thể thiếu định dạng; "
+                                    "cài Deno: winget install DenoLand.Deno")
+    if solver_available is None:
+        solver_available = _importable("yt_dlp_ejs")
+    if not solver_available:
+        return ("JS runtime", WARN, f"có {chon[0]} nhưng thiếu script giải thử thách (gói "
+                                    "yt-dlp-ejs) — YouTube có thể bóp tốc độ hoặc thiếu định dạng")
+    return ("JS runtime", OK, f"{chon[0]} — {chon[1]} + yt-dlp-ejs")
 
 
 def gpu_names() -> list[str]:

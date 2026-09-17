@@ -75,3 +75,40 @@ def test_backend_claude_thieu_key_la_hong(monkeypatch):
     status = dict((n, s) for n, s, _ in rows)
     assert status["Claude API"] == FAIL
     assert "Ollama" not in status
+
+
+# ------------------------------------------------------------------ yt-dlp + JS runtime
+def test_tuoi_yt_dlp_theo_so_phien_ban():
+    from datetime import date
+
+    from automeme.doctor import yt_dlp_age_days
+
+    assert yt_dlp_age_days("2026.8.19", date(2026, 9, 17)) == 29
+    assert yt_dlp_age_days("2026.08.19.232015", date(2026, 8, 19)) == 0  # bản nightly
+    assert yt_dlp_age_days("khong-phai-ngay", date(2026, 9, 17)) is None
+
+
+def test_yt_dlp_cu_qua_90_ngay_thi_nhac_cap_nhat(monkeypatch):
+    import importlib.metadata as md
+    from datetime import date
+
+    from automeme.doctor import yt_dlp_row
+
+    monkeypatch.setattr(md, "version", lambda name: "2026.1.1")
+    ten, trang_thai, chi_tiet = yt_dlp_row(today=date(2026, 9, 17))
+    assert trang_thai == WARN and "pip install -U yt-dlp" in chi_tiet
+    assert yt_dlp_row(today=date(2026, 1, 20))[1] == OK
+
+
+def test_js_runtime_row(monkeypatch):
+    import automeme.media.youtube as youtube
+    from automeme.doctor import js_runtime_row
+
+    monkeypatch.setattr(youtube, "pick_js_runtime", lambda pref: ("node", "C:/node.exe"))
+    assert js_runtime_row("auto", solver_available=True) == (
+        "JS runtime", OK, "node — C:/node.exe + yt-dlp-ejs")
+    thieu_script = js_runtime_row("auto", solver_available=False)
+    assert thieu_script[1] == WARN and "yt-dlp-ejs" in thieu_script[2]
+    monkeypatch.setattr(youtube, "pick_js_runtime", lambda pref: None)
+    assert js_runtime_row("auto")[1] == WARN and "DenoLand.Deno" in js_runtime_row("auto")[2]
+    assert js_runtime_row("none")[1] == WARN
