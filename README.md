@@ -23,6 +23,7 @@ render trực tiếp.
 | Stage F | Cache/invalidation + resume toàn pipeline | ✅ |
 | Stage G | Web UI local để duyệt timeline và render | ✅ |
 | Studio UI | Dashboard, upload, pipeline, editor và kho meme trong một giao diện | ✅ |
+| Tải YouTube | `automeme download` / `run <link>` / ô dán link trong Studio (yt-dlp) | ✅ |
 
 **Hướng dẫn chi tiết** (cài đặt từng bước, cấu hình, xử lý sự cố):
 [`docs/GUIDE.md`](docs/GUIDE.md). Đặc tả đầy đủ: [`docs/SPEC.md`](docs/SPEC.md). Tiến độ và các
@@ -71,6 +72,8 @@ Mục `[ HỎNG ]` phải xử lý hết; `[THIẾU ]` là thứ chưa cần cho
 ```powershell
 automeme --help
 automeme doctor                              # kiểm tra môi trường
+automeme download "https://youtu.be/..." --from 1:20 --to 2:40   # tải một đoạn YouTube
+automeme run "https://youtu.be/..." --from 1:20 --to 2:40        # tải xong chạy luôn
 automeme transcribe data\input\video.mp4     # lời thoại + thời điểm từng từ
 automeme transcribe data\input\video.mp4 --force   # nhận dạng lại
 automeme analyze data\input\video.mp4        # transcript → analysis.json

@@ -39,6 +39,7 @@ lặp, sai thời điểm); bạn **duyệt `timeline.json`** trước khi rende
 | Lệnh | Việc | Trạng thái |
 |---|---|---|
 | `automeme doctor` | Kiểm tra môi trường | ✅ dùng được |
+| `automeme download` | Tải video (hoặc một đoạn) từ YouTube vào `data/input/` | ✅ dùng được |
 | `automeme transcribe` | Video → transcript (lời thoại + thời điểm từng từ) | ✅ dùng được |
 | `automeme inspect` | Xem lại và kiểm tra timeline | ✅ dùng được |
 | `automeme render` | Timeline → video đã chèn meme | ✅ dùng được |
@@ -163,6 +164,8 @@ thoát với mã 1, dùng được trong script).
 | CTranslate2 CUDA | Lõi của faster-whisper có dùng được GPU không (chỉ hiện khi `WHISPER_DEVICE` khác `cpu`) | Cài `".[asr-cuda]"`. Thiếu cuDNN thì tới lúc nạp model mới lộ, thông báo lỗi sẽ nói rõ cách sửa |
 | Ollama | Server ở `OLLAMA_HOST` có chạy, đã tải model chưa | Mở ứng dụng Ollama; `ollama pull <model>` |
 | Claude API | Chỉ hiện khi `LLM_BACKEND=claude`: đã cài thư viện, có key chưa | Xem [2.6](#26-cài-thêm-theo-từng-giai-đoạn) |
+| yt-dlp | Đã cài chưa, có quá 90 ngày tuổi không | `python -m pip install -U yt-dlp` — YouTube đổi liên tục nên bản cũ hay hỏng |
+| JS runtime | Có Deno/Node/Bun và gói `yt-dlp-ejs` để giải thử thách của YouTube | Thiếu thì vẫn tải được nhưng có thể chậm/thiếu định dạng. Cài Deno: `winget install DenoLand.Deno` |
 | docker, git | Có trong PATH | Docker chỉ cần cho Meme Search |
 | Console UTF-8 | Console hiển thị được tiếng Việt | `setx PYTHONUTF8 1`, mở terminal mới |
 
@@ -278,7 +281,37 @@ với khóa đó, xem bảng `ENV_MAP` trong `src/automeme/config.py` — ví d�
 ### 5.1 Chọn video
 
 MVP nhắm tới video tiếng Việt **30–90 giây**, có hội thoại rõ, định dạng `.mp4`, `.mov` hoặc
-`.mkv`. Chép vào `data/input/`.
+`.mkv`. Chép vào `data/input/`, hoặc tải thẳng từ YouTube như dưới đây.
+
+**Tải từ YouTube** (dùng [yt-dlp](https://github.com/yt-dlp/yt-dlp), mã nguồn mở, đã cài sẵn):
+
+```powershell
+automeme download "https://www.youtube.com/watch?v=..." --from 1:20 --to 2:40
+automeme download "https://youtu.be/..."                    # cả video (nếu ngắn hơn 10 phút)
+automeme run "https://youtu.be/..." --from 1:20 --to 2:40 --profile funny   # tải xong chạy luôn
+```
+
+- Nhận link `watch?v=`, `youtu.be/`, `shorts/`, `live/`, kể cả khi dán thiếu `https://`. Link
+  playlist phải mở một video cụ thể rồi copy link của video đó. **Chỉ nhận YouTube**: Studio chạy
+  trên máy bạn, nếu nhận URL bất kỳ thì có thể bị lợi dụng để tải từ địa chỉ tùy ý.
+- `--from`/`--to` nhận `90`, `1:30`, `1:02:03.5`; bỏ trống một đầu thì lấy từ đầu hoặc tới hết.
+  Chỉ tải đúng đoạn đó, cắt đúng khung hình — tiết kiệm mạng và ổ đĩa.
+- File ra: `data/input/<tieu-de>-<mã video>[-<từ>s-<đến>s].mp4`, H.264 + AAC tối đa 1080p.
+  Kèm `<tên>.source.json` ghi link, kênh, **giấy phép**, đoạn đã cắt và thời điểm tải. Tải lại
+  cùng link và cùng đoạn thì bỏ qua; thêm `--force` để tải lại.
+- Giới hạn trong `configs/default.yaml`, mục `download`: `max_height` (1080),
+  `max_duration` (600 giây — video hoặc đoạn dài hơn thì bị chặn trước khi tải),
+  `max_filesize_mb` (1024), `js_runtime` (`auto`).
+
+> **Bản quyền:** điều khoản của YouTube hạn chế việc tải video. Chỉ tải video bạn sở hữu hoặc có
+> quyền dùng. Nếu video không ghi giấy phép Creative Commons, automeme vẫn tải nhưng cảnh báo;
+> giấy phép được lưu trong `.source.json` để bạn kiểm tra lại trước khi đăng.
+
+> **JS runtime:** YouTube bắt trình tải giải thử thách bằng JavaScript. automeme tự dùng Deno,
+> Node hoặc Bun nếu máy có (`download.js_runtime: auto`). Thiếu runtime hoặc thiếu script giải
+> thử thách (gói `yt-dlp-ejs`) thì vẫn tải được nhưng có thể chậm hoặc thiếu định dạng —
+> `automeme doctor` báo dòng **JS runtime**. YouTube thay đổi thường xuyên; khi tải bắt đầu lỗi,
+> việc đầu tiên nên làm là `python -m pip install -U yt-dlp`.
 
 ### 5.2 Các bước
 
@@ -535,7 +568,8 @@ automeme studio --no-browser --port 0   # tự mở URL được in trong log
 Trong Studio:
 
 1. **Tổng quan** hiển thị dự án gần đây và tình trạng Python/FFmpeg/GPU/Ollama.
-2. **Tạo video** nhận file kéo-thả, cho chọn profile và theo dõi bốn bước pipeline. Mỗi lần chỉ
+2. **Tạo video** nhận file kéo-thả **hoặc link YouTube** (dán link, tùy chọn đoạn Từ/Đến, bấm
+   **Tải về**; tải xong video tự được chọn), cho chọn profile và theo dõi bốn bước pipeline. Mỗi lần chỉ
    có một job GPU; lỗi ở giữa có thể chạy lại và các artifact còn mới được lấy từ cache.
 3. **Biên tập** phát video, đồng bộ transcript và waveform; kéo vùng meme/SFX để đổi thời gian,
    Accept/Reject, thay asset/vị trí/tỉ lệ/âm lượng rồi render lại.
@@ -610,6 +644,12 @@ cùng meme trong vòng 60 giây bị trừ thêm 0,30 điểm.
 | `python -m venv` báo lỗi | `python` trỏ tới bản Python embeddable | `py -3.11 -m venv .venv` |
 | Tiếng Việt thành `Ã¡`, `?` | Console không phải UTF-8 | `setx PYTHONUTF8 1` rồi mở terminal mới; hoặc `chcp 65001` |
 | `Không tìm thấy 'ffmpeg' trong PATH` ngay sau khi cài | Terminal cũ chưa nhận PATH mới | Đóng và mở lại terminal (hoặc VS Code) |
+| `Chỉ hỗ trợ link YouTube` | Link không phải youtube.com/youtu.be, hoặc có user/port lạ | Mở video trên YouTube rồi copy link từ thanh địa chỉ hoặc nút Chia sẻ |
+| `Đây là link playlist` | Link chỉ trỏ tới playlist | Mở một video trong playlist rồi copy link của video đó |
+| `Video dài …, vượt giới hạn` | Video hoặc đoạn dài hơn `download.max_duration` | Chọn đoạn bằng `--from/--to` (Studio: ô Từ/Đến), hoặc tăng giới hạn trong `configs/` |
+| `Video ở chế độ riêng tư` / `giới hạn độ tuổi` / `hội viên kênh` | Video cần đăng nhập | Chưa hỗ trợ đăng nhập/cookie — dùng video công khai |
+| `YouTube vừa thay đổi cách phát video` / `HTTP Error 403` | yt-dlp đã cũ so với YouTube | `python -m pip install -U yt-dlp` rồi thử lại |
+| Log yt-dlp báo `n challenge solving failed` | Thiếu script giải thử thách | Vẫn tải được nhưng có thể chậm — xem dòng JS runtime trong `automeme doctor` |
 | `Cấu hình không hợp lệ` | Giá trị sai trong `configs/` hoặc `.env` | Đọc tên khóa trong thông báo — xem [4.5](#45-khi-cấu-hình-sai) |
 | `Không có profile 'x'` | Sai tên hoặc chưa tạo file | Thông báo có liệt kê profile đang có |
 | `No such option: -v` | Đặt `-v` sau tên lệnh | `automeme -v <lệnh>` |

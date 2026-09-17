@@ -54,6 +54,7 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/transcription/normalize.py` | Chuẩn hóa + kiểm tra | `normalize_transcript`, `validate_transcript`, `format_transcript_summary` — hàm thuần |
 | `src/automeme/config.py` | Nạp cấu hình | `load_settings(profile, overrides, *, configs_dir, env, root)`; pydantic `extra="forbid"`; `ENV_MAP` ánh xạ tên biến SPEC §14 → khóa |
 | `src/automeme/doctor.py` | `automeme doctor` | Python, cấu hình, `.env`, ffmpeg/ffprobe + phiên bản, faster-whisper, GPU (nvidia-smi), Ollama (GET `/api/tags` + có model chưa) hoặc Claude, docker, git, UTF-8 |
+| `src/automeme/media/youtube.py` | Tải video YouTube | yt-dlp; hàm thuần `parse_youtube_url` (chỉ YouTube, chuẩn hóa về `watch?v=`), `parse_section`, `check_limits`, `pick_js_runtime`, `build_ydl_options`, `output_name`, `source_record`, `explain_download_error`; `download_youtube(..., ydl_factory)` đọc metadata trước, tải vào `data/temp` rồi đổi tên sang `data/input` |
 | `src/automeme/media/ffmpeg.py` | Chạy lệnh ngoài | `which` (tìm cả `Scripts/` của venv), `require_binary`, `run_cmd` (list args, log DEBUG nguyên lệnh), `CommandError` |
 | `src/automeme/media/probe.py` | ffprobe | `probe()` → `MediaInfo` (thời lượng, kích thước, fps, audio, sample rate, kênh, định dạng); `parse_probe` là hàm thuần, bỏ qua ảnh bìa |
 | `src/automeme/media/audio.py` | Tách audio | WAV PCM 16-bit mono 16 kHz; bỏ qua nếu đã có; ghi file `.part` rồi đổi tên |
@@ -65,6 +66,8 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 
 ```
 data/input/<video>                              video người dùng chép vào
+data/input/<tieu-de>-<id>[-<từ>s-<đến>s].mp4    video tải từ YouTube (automeme download)
+data/input/<cùng tên>.source.json               link, kênh, giấy phép, đoạn cắt, thời điểm tải
 data/cache/<ten-video>-<hash8>/audio.wav        WAV mono 16 kHz
 data/cache/<ten-video>-<hash8>/transcript-<asr8>.json   cache theo tham số ASR
 data/cache/meme-search/<id>.<ext>              media đã chọn và tải từ Meme Search
@@ -105,6 +108,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | `automeme inspect` | Xong | Chạy thật, cảnh báo đúng cooldown và mật độ |
 | `automeme render` (ảnh, GIF, vùng trong suốt) | Xong | Chạy thật; trích khung hình kiểm tra meme hiện đúng lúc, đúng góc; giữ nguyên tiếng gốc |
 | `automeme analyze` (Ollama/Claude) | Xong | Test offline; **2026-09-17 chạy thật với Ollama `qwen3:8b`**: chọn đúng câu punchline, lý do tiếng Việt hợp lý, structured output hợp lệ |
+| Tải video YouTube (CLI + Studio) | Xong | 2026-09-17 tải thật Big Buck Bunny (CC-BY): đoạn 0:30–1:00 qua CLI hết 29 s, đoạn 1:00–1:20 qua API Studio hết 17 s; H.264 1920×1080 60fps + AAC, thời lượng đúng; 70 test không cần mạng |
 | Nghiệm thu `automeme run` với model thật | Xong (trừ tiếng Việt) | 2026-09-17: Whisper large-v3 + qwen3:8b + kho 130 meme thật → MP4 trong 1 phút 51 giây; kiểm tra khung hình meme hiện đúng lúc, đúng góc |
 | Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
 | Catalog 100 meme phổ biến có nhãn | Xong | Đã tải thật 100/100; test catalog, tải/tái sử dụng, nhãn song ngữ, safe filter, CLI và Studio API |
@@ -127,6 +131,8 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Tìm kiếm local hiểu từ đồng nghĩa | Local provider so khớp chữ: "tiết lộ" không khớp "bị nói trúng", nên khi nghiệm thu meme lý tưởng (Monkey Puppet) chưa được chọn. Hướng xử lý: Meme Search (vector), hoặc mở rộng truy vấn bằng ontology Việt–Anh sẵn có — cần người dùng chọn |
 | Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
+| Script giải thử thách YouTube (gói `yt-dlp-ejs`) | Có Node nhưng thiếu script → yt-dlp báo "n challenge solving failed": vẫn tải đủ 1080p nhưng có thể bị bóp tốc độ/thiếu định dạng. **Chờ người dùng chọn:** cài `yt-dlp-ejs`, hoặc bật `remote_components=["ejs:github"]` |
+| Tải video cần đăng nhập (riêng tư, giới hạn tuổi, hội viên) | Chưa hỗ trợ cookie — báo lỗi rõ |
 | Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
 
@@ -138,7 +144,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **281 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **351 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -149,6 +155,8 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
   dựng từ Python 3.11.9. **Venv không được kích hoạt sẵn**: gọi qua `.venv\Scripts\...`.
 - FFmpeg 9.0.1 (winget), GPU RTX 4060 Laptop **8 GB VRAM**, Docker, gh, git.
 - **Đã có SDK Python:** `ollama==0.6.2`, `anthropic==1.4.0`.
+- **JS runtime cho yt-dlp:** có Node.js (`C:\Program Files\nodejs`), chưa có Deno/Bun, chưa có
+  gói `yt-dlp-ejs`.
 - **Đã có (kiểm tra 2026-09-17):** ứng dụng Ollama 0.34.0 (chưa tự chạy khi mở máy — cần mở app
   hoặc `ollama serve`) và model `qwen3:8b` 5,2 GB. **Chưa có:** file `.env`.
 - **Ổ C chỉ còn ~9,6 GB trống** (model Whisper/HF cache và Ollama đều nằm ở C). Nếu tải thêm
@@ -220,6 +228,25 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
     public. Analysis key phụ thuộc video/transcript/prompt/LLM/bộ lọc; timeline key phụ thuộc
     analysis/provider/thư viện/ranking; render key phụ thuộc video/timeline/assets/codec. Timeline
     hoặc output bị sửa ngoài automeme được giữ lại, chỉ `--force` mới ghi đè.
+
+**2026-09-17 — tải video YouTube** (người dùng đồng ý cả 5 điểm):
+
+- Công cụ: **yt-dlp** (Unlicense), khai báo là phụ thuộc chính trong `pyproject.toml`; JS runtime
+  tự chọn deno → node → bun (`download.js_runtime: auto`).
+- **Chỉ nhận link YouTube**, chuẩn hóa về `https://www.youtube.com/watch?v=<id>` trước khi đưa
+  cho yt-dlp (bỏ `list=` và tham số lạ, `noplaylist`). Lý do: extractor "generic" của yt-dlp tải
+  được URL bất kỳ, nên Studio nhận mọi URL thì có thể bị lợi dụng tải từ mạng nội bộ.
+- Tải một đoạn bằng `download_ranges` + `force_keyframes_at_cuts` (cắt đúng khung hình).
+  Kiểm tra giới hạn (`max_duration` 600 s, livestream) **trước** khi tải, dựa trên metadata.
+- Ưu tiên H.264 + AAC trong MP4 (`format_sort`), tối đa 1080p: xem được ngay trong Studio.
+- Tên file `<tiêu đề rút gọn ≤40 ký tự tại ranh giới chữ>-<id>[-<từ>s-<đến>s].mp4`; không slug
+  mã video (mã phân biệt hoa thường). Không phải Creative Commons thì cảnh báo, không chặn.
+- CLI: `automeme download` và `automeme run <link> --from --to`. Studio: `POST /api/videos/youtube`
+  dùng chung hàng đợi một job với pipeline (`JobState.kind = "download"`, `percent`).
+- Sửa kèm lỗi có sẵn trong Studio: `updateJob` ↔ `loadDashboard` ↔ `renderDashboard` lặp vô hạn
+  khi job cuối đã xong. Giờ việc khi job kết thúc chạy đúng một lần cho mỗi (job, trạng thái);
+  dashboard gọi `updateJob(..., {silent: true})`. Đo bằng Edge headless: mở trang chỉ gọi
+  `/api/dashboard` một lần.
 
 **2026-09-17 — sửa lỗi phát hiện khi nghiệm thu:**
 
@@ -410,6 +437,7 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] Cài catalog 30 reaction GIF động, xác minh frame và ưu tiên bằng style `animated`
 - [x] Cài catalog 30 SFX Kenney CC0, AI chọn theo query, cooldown/mật độ/volume và FFmpeg mix
 - [x] Vendor OSS offline + third-party notices
+- [x] Tải video YouTube bằng yt-dlp: CLI `download`, `run <link>`, ô dán link trong Studio
 
 ---
 
@@ -429,6 +457,33 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-17 (phiên 12) — Tải video YouTube bằng yt-dlp (Claude Code)
+
+**Đã làm.** `media/youtube.py` (hàm thuần + lớp gọi yt-dlp nhận `ydl_factory`), mục cấu hình
+`download`, lệnh `automeme download`, `automeme run` nhận link kèm `--from/--to`, hai dòng
+`doctor` (tuổi của yt-dlp; JS runtime + `yt-dlp-ejs`), job tải trong Studio + endpoint
+`/api/videos/youtube` + ô dán link ở trang Tạo video; cập nhật GUIDE/README/THIRD_PARTY_NOTICES.
+281 → **351 test**, ruff sạch. Bản sửa tìm kiếm tiếng Việt phiên 11 đã commit riêng (`b15b367`).
+
+**Đã chạy thật.**
+- CLI: tải đoạn 0:30–1:00 của `https://www.youtube.com/watch?v=aqz-KE-bpKQ` → 29 s, H.264
+  1920×1080 60fps + AAC, dài đúng 30,000 s, 14,8 MB; `.source.json` ghi giấy phép "Creative
+  Commons Attribution"; thư mục tạm đã dọn.
+- Studio API (như trình duyệt gửi): link `http://192.168.1.1/admin` → 400 kèm thông báo tiếng
+  Việt; link YouTube đoạn 1:00–1:20 → 202, xong sau 17 s, video hiện trong danh sách dự án.
+- Edge headless chụp trang Tạo video: khối "hoặc tải từ YouTube" đúng phong cách; mở trang khi
+  job cuối đã xong chỉ gọi `/api/dashboard` **một lần** (trước đây lặp vô hạn).
+
+**Phát hiện khi chạy thật.**
+- Nhận định lúc lập kế hoạch "có Node là đủ" **sai**: lần thử đó chỉ liệt kê định dạng. Khi tải
+  thật, yt-dlp báo thiếu script giải thử thách ("n challenge solving failed"). Vẫn tải đủ 1080p
+  nhưng có thể bị bóp tốc độ. `doctor` đã sửa để báo đúng (THIẾU, nêu gói `yt-dlp-ejs`).
+- Tên file ban đầu xấu ("…4k---official-blender-foundat-…") → gộp gạch nối, cắt tại ranh giới chữ.
+- Tải theo đoạn không có phần trăm (yt-dlp cắt bằng FFmpeg) → thêm dòng trạng thái "Đang tải đoạn…".
+
+**Còn tồn tại.** Chọn cách bổ sung script giải thử thách (xem "Chưa làm được"); chưa hỗ trợ video
+cần đăng nhập; chưa chạy trọn pipeline trên video tải về có lời thoại tiếng Việt.
 
 ### 2026-09-17 (phiên 11) — Nghiệm thu với model thật + sửa tìm kiếm tiếng Việt (Claude Code)
 

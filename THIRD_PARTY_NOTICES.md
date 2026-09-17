@@ -13,6 +13,17 @@ Toàn văn giấy phép tương ứng được giữ tại `src/automeme/studio/
 
 Các thư viện trên chỉ được dùng ở frontend; runtime Python của `automeme` không phụ thuộc npm.
 
+## Thư viện Python để tải video YouTube
+
+| Thành phần | Phiên bản tối thiểu | Giấy phép | Nguồn |
+|---|---:|---|---|
+| yt-dlp | 2026.8.19 | Unlicense (public domain) | https://github.com/yt-dlp/yt-dlp |
+
+yt-dlp được cài như một phụ thuộc pip (khai báo trong `pyproject.toml`), không được sao chép vào
+repository. Video tải về nằm trong `data/input/` và bị `.gitignore` loại khỏi repository; giấy
+phép của từng video được ghi trong file `.source.json` đi kèm. Điều khoản của YouTube hạn chế việc
+tải video — người dùng tự chịu trách nhiệm chỉ tải nội dung mình có quyền sử dụng.
+
 ## Sound effect assets (không nằm trong Git)
 
 Lệnh `automeme install-sfx` tải một tập con 30 file từ **Kenney Interface/Impact/Digital
