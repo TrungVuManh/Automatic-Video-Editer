@@ -83,6 +83,12 @@ download:
   max_duration: 600          # giây — video/đoạn dài hơn thì phải chọn --from/--to
   max_filesize_mb: 1024
   js_runtime: auto           # auto | deno | node | bun | none — YouTube cần JS runtime để giải mã
+  # Link có mốc thời gian (&t=3750s, "Sao chép URL tại thời điểm hiện tại") mà không nhập --to:
+  # tải đoạn dài chừng này tính từ mốc đó.
+  clip_seconds: 90
+  # Kênh của bạn — video từ các kênh này không hiện cảnh báo bản quyền. Nên đặt trong .env
+  # (YOUTUBE_OWN_CHANNELS=@kenh_cua_ban) thay vì sửa file này, để không commit thông tin riêng.
+  own_channels: []
 
 output:
   video_codec: libx264

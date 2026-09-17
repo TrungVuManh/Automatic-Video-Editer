@@ -143,7 +143,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **355 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **377 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -241,6 +241,13 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
   đã duyệt.
 - Livestream: `is_live`, `is_upcoming`, `post_live` (vừa kết thúc, đang xử lý bản ghi) bị chặn với
   thông báo riêng từng trường hợp; `was_live` tải bình thường.
+- **Kênh của bạn** (người dùng: "just do your best"): `YOUTUBE_OWN_CHANNELS` trong `.env` →
+  `download.own_channels`. Đặt ở `.env` chứ không ở `configs/` vì là thông tin riêng, không commit.
+  So khớp `channel_id`, `uploader_id` (@handle), `channel_url`, `uploader_url` sau khi chuẩn hóa;
+  link tab kênh (`/@kenh/streams`, `/channel/UC…/videos`) lấy đúng đoạn định danh.
+- **Mốc `t=` trong link** (`t=3750`, `t=1h2m30s`, `start=`, `#t=`): chỉ điền `--from` còn trống;
+  thiếu `--to` thì lấy `download.clip_seconds` (90 s), kẹp theo thời lượng video. `--from` người
+  dùng nhập luôn thắng. Link vẫn được chuẩn hóa (bỏ `t=`) trước khi đưa cho yt-dlp.
 - **Chỉ nhận link YouTube**, chuẩn hóa về `https://www.youtube.com/watch?v=<id>` trước khi đưa
   cho yt-dlp (bỏ `list=` và tham số lạ, `noplaylist`). Lý do: extractor "generic" của yt-dlp tải
   được URL bất kỳ, nên Studio nhận mọi URL thì có thể bị lợi dụng tải từ mạng nội bộ.
@@ -495,9 +502,15 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 (trước 17 s). `doctor` kiểm tra ejs khớp bản yt-dlp ghim. Thông báo riêng cho live đang phát /
 chưa bắt đầu / vừa kết thúc. GUIDE thêm mục tải lại livestream. 351 → **355 test**.
 
+**Bổ sung lần 2** (người dùng: "just do your best"): khai báo kênh của mình
+(`YOUTUBE_OWN_CHANNELS`) để tắt cảnh báo bản quyền, và dán link có mốc `t=` để tải 90 giây từ
+mốc đó — dành cho quy trình xem lại VOD, "Sao chép URL tại thời điểm hiện tại". Test viết cho
+link tab kênh lộ ra lỗi thật: `/@kenh/streams` bị hiểu thành kênh `@streams` → đã sửa. Chạy thật:
+link `?t=600` tải đúng 10:00–10:35 (kẹp theo cuối video); khai báo bằng link tab
+`/@BlenderOfficial/streams` nhận đúng kênh từ metadata thật. 355 → **377 test**.
+
 **Còn tồn tại.** Chưa hỗ trợ video cần đăng nhập (VOD riêng tư); chưa chạy trọn pipeline trên
-livestream tiếng Việt thật của người dùng; mỗi lần tải video của chính người dùng vẫn hiện cảnh
-báo "không phải Creative Commons" (cân nhắc cấu hình danh sách kênh của mình).
+livestream tiếng Việt thật của người dùng (cần link + mốc thời gian từ người dùng).
 
 ### 2026-09-17 (phiên 11) — Nghiệm thu với model thật + sửa tìm kiếm tiếng Việt (Claude Code)
 

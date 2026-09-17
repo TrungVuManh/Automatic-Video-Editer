@@ -140,6 +140,16 @@ class DownloadSettings(_Section):
     max_duration: float = Field(gt=0)
     max_filesize_mb: int = Field(ge=1)
     js_runtime: Literal["auto", "deno", "node", "bun", "none"]
+    clip_seconds: float = Field(gt=0)
+    own_channels: list[str] = Field(default_factory=list)
+
+    @field_validator("own_channels", mode="before")
+    @classmethod
+    def _tach_danh_sach(cls, v: Any) -> Any:
+        # .env chỉ chứa chuỗi: "@kenh1, UCabc…" → ["@kenh1", "UCabc…"]
+        if isinstance(v, str):
+            return [part.strip() for part in v.split(",") if part.strip()]
+        return v
 
 
 class OutputSettings(_Section):
@@ -202,6 +212,7 @@ ENV_MAP: dict[str, tuple[str, str]] = {
     "AUDIO_CODEC": ("output", "audio_codec"),
     "OUTPUT_CRF": ("output", "crf"),
     "OUTPUT_PRESET": ("output", "preset"),
+    "YOUTUBE_OWN_CHANNELS": ("download", "own_channels"),
 }
 
 _TEN_PROFILE = re.compile(r"^[\w-]+$")

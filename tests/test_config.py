@@ -155,3 +155,10 @@ def test_env_example_de_comment_tham_so_dung_video():
     profile_keys = [n for n, (section, _) in ENV_MAP.items() if section in ("editing", "meme")]
     for name in profile_keys:
         assert not re.search(rf"^{name}=", text, flags=re.MULTILINE), name
+
+
+def test_kenh_cua_ban_doc_tu_env_dang_danh_sach():
+    assert load_settings(env={}).download.own_channels == []
+    doc = load_settings(env={"YOUTUBE_OWN_CHANNELS": " @toi , UCabc ,, "})
+    assert doc.download.own_channels == ["@toi", "UCabc"]
+    assert load_settings(env={}).download.clip_seconds == 90

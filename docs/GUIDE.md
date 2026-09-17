@@ -204,6 +204,7 @@ nằm trong `configs/default.yaml`.
 | `MEME_SEARCH_MAX_DOWNLOAD_MB` | `25` | Giới hạn kích thước mỗi media tải từ API |
 | `OUTPUT_CRF` | `18` | Nhỏ hơn = đẹp hơn, file to hơn |
 | `OUTPUT_PRESET` | `medium` | `fast` / `veryfast` để render nhanh hơn |
+| `YOUTUBE_OWN_CHANNELS` | (trống) | Kênh YouTube của bạn (`@handle`, `UC…` hoặc link kênh, cách nhau bằng dấu phẩy) — tắt cảnh báo bản quyền khi tải video từ các kênh này |
 | `LOG_LEVEL` | `INFO` | `DEBUG` để xem chi tiết trên console |
 
 Để trống một biến = dùng giá trị trong `configs/`.
@@ -318,15 +319,30 @@ automeme run "https://youtu.be/..." --from 1:20 --to 2:40 --profile funny   # t�
 
 **Tải lại livestream của bạn:**
 
-- Bản ghi livestream thường dài hàng giờ, nên luôn tải **một đoạn**: mở VOD, tìm khoảnh khắc
-  muốn dựng, ghi mốc thời gian rồi dùng `--from/--to` (ví dụ `--from 1:02:30 --to 1:04:00`).
-  Chỉ đoạn đó được tải, không phải cả buổi stream.
+- Bản ghi livestream thường dài hàng giờ, nên luôn tải **một đoạn**. Cách nhanh nhất: xem lại
+  VOD, dừng đúng lúc khoảnh khắc bắt đầu, **chuột phải vào video → "Sao chép URL video tại thời
+  điểm hiện tại"**, rồi dán link đó (có `&t=…`) mà không cần nhập Từ/Đến:
+
+  ```powershell
+  automeme run "https://youtu.be/<mã>?t=3750" --profile funny   # tải 01:02:30 → 01:04:00 rồi dựng
+  ```
+
+  Đoạn mặc định dài 90 giây (`download.clip_seconds`). Nhập `--to` để tự chọn điểm kết thúc;
+  nhập `--from` thì mốc trong link bị bỏ qua. Vẫn dùng được cách cũ `--from 1:02:30 --to 1:04:00`.
 - Ngay sau khi live kết thúc, YouTube còn **xử lý bản ghi** (vài chục phút tới vài giờ). Lúc đó
   automeme báo "Buổi live vừa kết thúc…" — đợi xử lý xong rồi tải lại.
 - VOD để chế độ **Không công khai** tải được bằng link; để **Riêng tư** thì không (cần đăng nhập,
   chưa hỗ trợ).
-- Video của chính bạn thường không ghi giấy phép Creative Commons nên sẽ có dòng cảnh báo bản
-  quyền — với nội dung của bạn thì có thể bỏ qua.
+- Video của chính bạn thường không ghi giấy phép Creative Commons nên mặc định sẽ có dòng cảnh
+  báo bản quyền. Khai báo kênh của bạn trong `.env` để tắt cảnh báo cho riêng kênh đó:
+
+  ```env
+  YOUTUBE_OWN_CHANNELS=@ten_kenh_cua_ban
+  ```
+
+  Nhận `@handle`, mã kênh `UC…` hoặc link kênh (kể cả link tab "Trực tiếp" dạng
+  `https://www.youtube.com/@ten_kenh/streams`); nhiều kênh thì cách nhau bằng dấu phẩy. Sau lần
+  tải đầu, dòng **Kênh** trong kết quả in sẵn handle để bạn copy.
 
 ### 5.2 Các bước
 

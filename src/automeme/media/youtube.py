@@ -105,6 +105,79 @@ def canonical_url(video_id: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
+_MOC_THOI_GIAN = re.compile(r"^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s?)?$")
+_MA_KENH = re.compile(r"^uc[\w-]{22}$")
+
+
+def link_start_time(url: str) -> float | None:
+    """Mốc thời gian trong link: `t=3750`, `t=3750s`, `t=1h2m30s`, `start=90`, `#t=1m30s`."""
+    raw = (url or "").strip()
+    if "://" not in raw:
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    query, fragment = parse_qs(parsed.query), parse_qs(parsed.fragment)
+    value = (query.get("t") or query.get("start") or fragment.get("t") or [""])[0]
+    match = _MOC_THOI_GIAN.match(value.strip().casefold())
+    if not value or not match or not any(match.groups()):
+        return None
+    gio, phut, giay = match.groups()
+    tong = int(gio or 0) * 3600 + int(phut or 0) * 60 + float(giay or 0)
+    return tong if tong > 0 else None
+
+
+def resolve_section_inputs(start: str | None, end: str | None, *, link_start: float | None,
+                           clip_seconds: float, video_duration: float | None
+                           ) -> tuple[str | None, str | None, bool]:
+    """Điền `--from/--to` còn trống bằng mốc `t=` của link. Trả về (từ, đến, có dùng mốc link).
+
+    `--from` người dùng nhập luôn thắng mốc trong link. Thiếu `--to` thì lấy `clip_seconds`
+    giây tính từ mốc, kẹp theo thời lượng video.
+    """
+    start = (start or "").strip() or None
+    end = (end or "").strip() or None
+    if link_start is None or start is not None:
+        return start, end, False
+    if end is None:
+        ket_thuc = link_start + clip_seconds
+        if video_duration:
+            ket_thuc = min(ket_thuc, video_duration)
+        end = f"{ket_thuc:g}"
+    return f"{link_start:g}", end, True
+
+
+def normalize_channel(value: str) -> str:
+    """Chuẩn hóa định danh kênh để so sánh: link kênh, `@handle`, mã `UC…`, hoặc tên handle trần."""
+    v = (value or "").strip()
+    thap = v.casefold()
+    if "://" in v or thap.startswith(("www.", "m.", "youtube.com")):
+        parts = [p for p in urlparse(v if "://" in v else "https://" + v).path.split("/") if p]
+        # Link hay được copy từ một tab của kênh: /@kenh/streams, /channel/UC…/videos. Lấy đúng
+        # đoạn định danh kênh, không lấy đoạn cuối ("streams" không phải tên kênh).
+        handle = next((p for p in parts if p.startswith("@")), None)
+        if handle:
+            v = handle
+        elif len(parts) >= 2 and parts[0] in ("channel", "c", "user"):
+            v = parts[1]
+        else:
+            v = parts[0] if parts else ""
+        thap = v.casefold()
+    if not thap:
+        return ""
+    if thap.startswith("@") or _MA_KENH.match(thap):
+        return thap
+    return "@" + thap  # người dùng gõ handle mà quên @
+
+
+def is_own_channel(info: dict[str, Any], own_channels: list[str]) -> bool:
+    """Video có thuộc một trong các kênh người dùng khai báo là của mình không."""
+    can = {normalize_channel(c) for c in own_channels} - {""}
+    if not can:
+        return False
+    co = {normalize_channel(str(info.get(k) or ""))
+          for k in ("channel_id", "uploader_id", "channel_url", "uploader_url")}
+    return bool(can & (co - {""}))
+
+
 def is_youtube_link(text: str) -> bool:
     """Chuỗi người dùng đưa vào trông như một link (không phải đường dẫn file)?
 
@@ -122,16 +195,21 @@ def format_download_summary(result: DownloadResult) -> str:
     section = src.get("section")
     doan = ("cả video" if not section
             else f"{format_ts(section['start'])} → {format_ts(section['end'])}")
+    handle = src.get("channel_handle")
+    kenh = f"{src.get('channel') or 'không rõ'}" + (f" ({handle})" if handle else "")
     dong = [
         ("Đã có sẵn: " if result.skipped else "Đã tải: ") + str(result.path),
         f"  Tiêu đề:   {src.get('title')}",
-        f"  Kênh:      {src.get('channel') or 'không rõ'}",
+        f"  Kênh:      {kenh}" + ("  — kênh của bạn" if src.get("own_channel") else ""),
         f"  Đoạn:      {doan}",
         f"  Giấy phép: {src.get('license') or 'không ghi'}",
     ]
-    if not src.get("creative_commons"):
+    if not src.get("creative_commons") and not src.get("own_channel"):
         dong.append("  Lưu ý: video không ghi giấy phép Creative Commons — chỉ dùng nếu bạn có "
                     "quyền với nội dung này.")
+        if handle:
+            dong.append(f"  Nếu đây là kênh của bạn: thêm YOUTUBE_OWN_CHANNELS={handle} vào .env "
+                        "để tắt lưu ý này.")
     dong.append(f'Tiếp theo: automeme run "{result.path}"')
     return "\n".join(dong)
 
@@ -264,7 +342,7 @@ def is_creative_commons(license_text: str | None) -> bool:
 
 
 def source_record(info: dict[str, Any], section: Section | None, *, tool_version: str,
-                  downloaded_at: datetime) -> dict[str, Any]:
+                  downloaded_at: datetime, own_channel: bool = False) -> dict[str, Any]:
     """Nội dung `<tên>.source.json`: đủ để ghi nguồn và tự kiểm tra quyền sử dụng về sau."""
     license_text = info.get("license")
     return {
@@ -274,6 +352,9 @@ def source_record(info: dict[str, Any], section: Section | None, *, tool_version
         "title": info.get("title"),
         "channel": info.get("channel") or info.get("uploader"),
         "channel_url": info.get("channel_url") or info.get("uploader_url"),
+        "channel_id": info.get("channel_id"),
+        "channel_handle": info.get("uploader_id"),
+        "own_channel": own_channel,
         "upload_date": info.get("upload_date"),
         "duration": info.get("duration"),
         "license": license_text,
@@ -404,15 +485,25 @@ def download_youtube(url: str, settings: Settings, *, start: str | None = None,
     except Exception as exc:
         raise DownloadError(explain_download_error(str(exc))) from exc
 
+    start, end, tu_link = resolve_section_inputs(
+        start, end, link_start=link_start_time(url), clip_seconds=cfg.clip_seconds,
+        video_duration=info.get("duration"))
     section = parse_section(start, end, video_duration=info.get("duration"))
+    if tu_link and section is not None:
+        log.info("Link có mốc thời gian → tải %s–%s (đổi độ dài bằng --to hoặc "
+                 "download.clip_seconds).", format_ts(section.start), format_ts(section.end))
     check_limits(info, section, cfg)
     target = input_dir / output_name(info, section)
     sidecar = target.with_name(target.stem + ".source.json")
+    own = is_own_channel(info, cfg.own_channels)
     record = source_record(info, section, tool_version=_tool_version(),
-                           downloaded_at=(now or (lambda: datetime.now(timezone.utc)))())
-    if not record["creative_commons"]:
+                           downloaded_at=(now or (lambda: datetime.now(timezone.utc)))(),
+                           own_channel=own)
+    if not record["creative_commons"] and not own:
         log.warning("Video \"%s\" không ghi giấy phép Creative Commons (%s). Chỉ dùng nếu bạn có "
-                    "quyền với nội dung này.", info.get("title"), record["license"] or "không rõ")
+                    "quyền với nội dung này. Nếu là kênh của bạn, thêm YOUTUBE_OWN_CHANNELS=%s "
+                    "vào .env để tắt cảnh báo.", info.get("title"), record["license"] or "không rõ",
+                    info.get("uploader_id") or info.get("channel_id") or "@ten_kenh")
 
     if target.exists() and not force:
         log.info("Đã có %s, bỏ qua tải. Thêm --force để tải lại.", target.name)

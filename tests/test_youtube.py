@@ -320,3 +320,84 @@ def test_canh_bao_khi_khong_phai_creative_commons(settings, caplog):
         download_youtube(f"https://youtu.be/{ID}", settings, start="0", end="30",
                          ydl_factory=YdlGia(info, []))
     assert any("Creative Commons" in r.getMessage() for r in caplog.records)
+
+
+# ------------------------------------------------------------------ mốc t= trong link
+@pytest.mark.parametrize("url, moc", [
+    (f"https://youtu.be/{ID}?t=3750", 3750.0),
+    (f"https://youtu.be/{ID}?si=abc&t=3750s", 3750.0),
+    (f"https://www.youtube.com/watch?v={ID}&t=1h2m30s", 3750.0),
+    (f"https://www.youtube.com/watch?v={ID}&t=62m30s", 3750.0),
+    (f"https://www.youtube.com/embed/{ID}?start=90", 90.0),
+    (f"https://www.youtube.com/watch?v={ID}#t=1m30s", 90.0),
+    (f"https://youtu.be/{ID}", None),
+    (f"https://youtu.be/{ID}?t=0", None),
+    (f"https://youtu.be/{ID}?t=abc", None),
+])
+def test_doc_moc_thoi_gian_trong_link(url, moc):
+    assert yt.link_start_time(url) == moc
+
+
+def test_moc_link_dien_vao_from_to_con_trong():
+    def r(start, end, link_start, duration):
+        return yt.resolve_section_inputs(start, end, link_start=link_start, clip_seconds=90,
+                                         video_duration=duration)
+
+    assert r(None, None, 3750, 7200) == ("3750", "3840", True)
+    assert r(None, None, 7150, 7200) == ("7150", "7200", True)  # gần cuối video: kẹp lại
+    # người dùng nhập --to thì giữ nguyên, chỉ lấy điểm bắt đầu từ link
+    assert r(None, "1:04:00", 3750, None) == ("3750", "1:04:00", True)
+    # --from người dùng nhập luôn thắng mốc trong link
+    assert r("10", None, 3750, 7200) == ("10", None, False)
+    assert r(" ", "", None, 7200) == (None, None, False)
+
+
+# ------------------------------------------------------------------ kênh của bạn
+@pytest.mark.parametrize("value, chuan", [
+    ("@KenhCuaToi", "@kenhcuatoi"),
+    ("kenhcuatoi", "@kenhcuatoi"),                              # quên @
+    ("https://www.youtube.com/@KenhCuaToi", "@kenhcuatoi"),
+    ("youtube.com/@KenhCuaToi/streams", "@kenhcuatoi"),          # link tab Trực tiếp của kênh
+    ("https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg/videos",
+     "ucsmoqebj2ranufungnqoxlg"),
+    ("UCSMOQeBJ2RAnuFungnQOxLg", "ucsmoqebj2ranufungnqoxlg"),
+    ("https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg", "ucsmoqebj2ranufungnqoxlg"),
+    ("  ", ""),
+])
+def test_chuan_hoa_dinh_danh_kenh(value, chuan):
+    assert yt.normalize_channel(value) == chuan
+
+
+def test_nhan_ra_kenh_cua_ban():
+    info = {"channel_id": "UCSMOQeBJ2RAnuFungnQOxLg", "uploader_id": "@BlenderOfficial",
+            "uploader_url": "https://www.youtube.com/@BlenderOfficial"}
+    assert yt.is_own_channel(info, ["@blenderofficial"])
+    assert yt.is_own_channel(info, ["https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg"])
+    assert yt.is_own_channel(info, ["@khac", "BlenderOfficial"])
+    assert not yt.is_own_channel(info, ["@khac"])
+    assert not yt.is_own_channel(info, [])
+    assert not yt.is_own_channel({}, ["@blenderofficial"])
+
+
+def test_tom_tat_goi_y_khai_bao_kenh_hoac_bo_luu_y():
+    from automeme.media.youtube import DownloadResult, format_download_summary
+
+    nguon = {"title": "Stream", "channel": "Tôi", "channel_handle": "@toi", "license": None,
+             "creative_commons": False, "own_channel": False, "section": None}
+    la = format_download_summary(DownloadResult(Path("a.mp4"), nguon, False))
+    assert "Lưu ý" in la and "YOUTUBE_OWN_CHANNELS=@toi" in la and "(@toi)" in la
+    cua_toi = format_download_summary(DownloadResult(Path("a.mp4"), {**nguon, "own_channel": True},
+                                                     False))
+    assert "Lưu ý" not in cua_toi and "kênh của bạn" in cua_toi
+
+
+def test_tai_link_co_moc_thoi_gian_cua_kenh_minh(tmp_path, caplog):
+    settings = load_settings(env={"YOUTUBE_OWN_CHANNELS": "@toi, @kenh-khac"}, root=tmp_path)
+    info = {**INFO, "duration": 3 * 3600, "license": None, "uploader_id": "@Toi",
+            "live_status": "was_live", "title": "Stream tối qua"}
+    with caplog.at_level("WARNING", logger="automeme"):
+        kq = download_youtube(f"https://youtu.be/{ID}?t=1h2m30s", settings,
+                              ydl_factory=YdlGia(info, []))
+    assert kq.path.name == f"stream-toi-qua-{ID}-3750s-3840s.mp4"
+    assert kq.source["own_channel"] is True and kq.source["section"] == {"start": 3750, "end": 3840}
+    assert not any("Creative Commons" in r.getMessage() for r in caplog.records)

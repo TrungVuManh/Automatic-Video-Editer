@@ -74,6 +74,7 @@ automeme --help
 automeme doctor                              # kiểm tra môi trường
 automeme download "https://youtu.be/..." --from 1:20 --to 2:40   # tải một đoạn YouTube
 automeme run "https://youtu.be/..." --from 1:20 --to 2:40        # tải xong chạy luôn
+automeme run "https://youtu.be/...?t=3750"                        # link có mốc: tải 90 giây từ đó
 automeme transcribe data\input\video.mp4     # lời thoại + thời điểm từng từ
 automeme transcribe data\input\video.mp4 --force   # nhận dạng lại
 automeme analyze data\input\video.mp4        # transcript → analysis.json
