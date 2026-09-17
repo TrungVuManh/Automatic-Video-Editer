@@ -159,7 +159,10 @@ def render(
     except (FileNotFoundError, TimelineError, CommandError, ValueError) as e:
         log.error("%s", e)
         raise typer.Exit(code=1) from None
-    typer.echo(f"Đã chèn {len(tl.events)} meme → {path}")
+    active = tl.active_events()  # sự kiện bị Reject không được render nên không đếm
+    meme_count = sum(event.type == "meme" for event in active)
+    sfx_count = sum(event.type == "sfx" for event in active)
+    typer.echo(f"Đã dựng {meme_count} meme + {sfx_count} SFX → {path}")
 
 
 @app.command()

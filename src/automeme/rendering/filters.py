@@ -5,10 +5,12 @@ tránh hẳn chuyện escape `:` và `\` trên Windows.
 
 Mỗi sự kiện sinh ra hai đoạn filter:
 
-    [1:v]scale=576:-2,setpts=PTS-STARTPTS+8.880/TB[m0]
+    [1:v]scale=w=576:h=486:force_original_aspect_ratio=decrease:force_divisible_by=2,…[m0]
     [0:v][m0]overlay=W-w-58:H-h-58:enable='between(t,8.880,10.230)':eof_action=pass[v]
 
-- `scale`: bề rộng = tỉ lệ `scale` của bề rộng video (SPEC §38), cao `-2` để giữ tỉ lệ và luôn chẵn.
+- `scale`: bề rộng tối đa = tỉ lệ `scale` của bề rộng video (SPEC §38), chiều cao tối đa =
+  `max_height_ratio` của chiều cao video; giữ tỉ lệ ảnh, cạnh luôn chẵn. Không kẹp chiều cao thì
+  GIF khổ dọc rộng 30% khung sẽ cao gần hết màn hình.
 - `setpts`: dời meme tới đúng thời điểm, để GIF bắt đầu chạy từ khung đầu.
 - `enable`: chỉ hiện trong khoảng của sự kiện; `eof_action=pass` để video chính không bị cắt
   ngắn khi meme hết.
@@ -37,7 +39,7 @@ class RenderPlan:
 def build_render_plan(events: Sequence[TimelineEvent], asset_paths: Sequence[Path], *,
                       video_w: int, video_h: int, scale_default: float,
                       position_default: str, margin_ratio: float,
-                      has_audio: bool = True) -> RenderPlan:
+                      max_height_ratio: float = 1.0, has_audio: bool = True) -> RenderPlan:
     """Sự kiện + asset → input, chuỗi overlay video và trộn SFX."""
     if len(events) != len(asset_paths):
         raise ValueError("Số sự kiện và số đường dẫn asset không khớp")
@@ -69,8 +71,10 @@ def build_render_plan(events: Sequence[TimelineEvent], asset_paths: Sequence[Pat
 
     for i, (input_index, e) in enumerate(meme_rows):
         rong = _chan(video_w * (e.scale if e.scale is not None else scale_default))
+        cao = _chan(video_h * max_height_ratio)
         chuan_bi_video.append(
-            f"[{input_index}:v]scale={rong}:-2,setpts=PTS-STARTPTS+{e.start:.3f}/TB[m{i}]"
+            f"[{input_index}:v]scale=w={rong}:h={cao}:force_original_aspect_ratio=decrease:"
+            f"force_divisible_by=2,setpts=PTS-STARTPTS+{e.start:.3f}/TB[m{i}]"
         )
 
         x, y = vi_tri_overlay(e.position or position_default, le)

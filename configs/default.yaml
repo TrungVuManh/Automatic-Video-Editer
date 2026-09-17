@@ -58,6 +58,7 @@ meme:
   scale_default: 0.30        # bề rộng meme = 30% bề rộng video (SPEC §38)
   position_default: bottom-right   # top-left | top-right | bottom-left | bottom-right | center
   margin_ratio: 0.03         # lề của meme, tính theo bề rộng video
+  max_height_ratio: 0.45     # meme cao tối đa 45% khung — GIF/ảnh khổ dọc không che nửa màn hình
 
 sfx:
   enabled: true

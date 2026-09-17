@@ -228,3 +228,22 @@ def test_mot_meme_trong_video_ngan_khong_bi_bao_qua_day(settings):
     _, canh_bao = validate_timeline(tl, video_duration=11.68, asset_paths={"a.png": Path("a.png")},
                                     editing_cfg=settings.editing, ton_tai=_co_file)
     assert not any("meme/phút" in c for c in canh_bao)
+
+
+def test_cooldown_do_tu_dau_toi_dau_nhu_spec(settings):
+    """SPEC §32 (cooldown 7s): meme lúc 00:05 thì ứng viên 00:13 được giữ.
+
+    Lỗi thật khi nghiệm thu livestream: bộ lọc analyzer đo đầu→đầu nhưng validator đo cuối→đầu,
+    nên timeline do chính hệ thống dựng bị chính validator cảnh báo.
+    """
+    tl = _tl({"id": "e1", "start": 5, "duration": 1.5, "asset": "a.png", "position": "center"},
+             {"id": "e2", "start": 13, "duration": 1.5, "asset": "a.png", "position": "top-left"})
+    _, canh_bao = validate_timeline(tl, video_duration=120, asset_paths={"a.png": Path("a.png")},
+                                    editing_cfg=settings.editing, ton_tai=_co_file)
+    assert not any("cooldown" in c for c in canh_bao)
+    tl_gan = _tl({"id": "e1", "start": 5, "duration": 1.5, "asset": "a.png"},
+                 {"id": "e2", "start": 8, "duration": 1.5, "asset": "a.png"})
+    _, canh_bao = validate_timeline(tl_gan, video_duration=120,
+                                    asset_paths={"a.png": Path("a.png")},
+                                    editing_cfg=settings.editing, ton_tai=_co_file)
+    assert any("cooldown" in c for c in canh_bao)  # 00:08 vẫn phải bị cảnh báo

@@ -108,6 +108,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | `automeme inspect` | Xong | Chạy thật, cảnh báo đúng cooldown và mật độ |
 | `automeme render` (ảnh, GIF, vùng trong suốt) | Xong | Chạy thật; trích khung hình kiểm tra meme hiện đúng lúc, đúng góc; giữ nguyên tiếng gốc |
 | `automeme analyze` (Ollama/Claude) | Xong | Test offline; **2026-09-17 chạy thật với Ollama `qwen3:8b`**: chọn đúng câu punchline, lý do tiếng Việt hợp lý, structured output hợp lệ |
+| **Nghiệm thu livestream tiếng Việt thật** | Chạy được, chất lượng chưa đạt | 2026-09-17: `automeme run <link> --from 36:00 --to 37:30` trên VOD 2 giờ 28 phút của người dùng → MP4 trong 3 phút 59 giây, không lỗi, giữ tiếng + trộn SFX. Chất lượng: xem mục "Chưa làm được" |
 | Tải video YouTube (CLI + Studio) | Xong | 2026-09-17 tải thật Big Buck Bunny (CC-BY): đoạn 0:30–1:00 qua CLI hết 29 s, đoạn 1:00–1:20 qua API Studio hết 17 s; H.264 1920×1080 60fps + AAC, thời lượng đúng; 70 test không cần mạng |
 | Nghiệm thu `automeme run` với model thật | Xong (trừ tiếng Việt) | 2026-09-17: Whisper large-v3 + qwen3:8b + kho 130 meme thật → MP4 trong 1 phút 51 giây; kiểm tra khung hình meme hiện đúng lúc, đúng góc |
 | Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
@@ -132,6 +133,11 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
 | Tải video cần đăng nhập (riêng tư, giới hạn tuổi, hội viên) | Chưa hỗ trợ cookie — báo lỗi rõ |
+| **Quá nhiều meme trên livestream** | Nghiệm thu: 7 meme + 4 SFX trong 90 s. qwen3:8b cho confidence 0,85 gần như mọi đoạn (7/10), lý do chung chung → chạm trần `floor(1,5 × 5)`. Cần: prompt đòi chấm điểm phân biệt + chỉ giữ top theo điểm, hoặc profile riêng cho stream |
+| **Đoạn transcript quá dài → meme lệch câu đùa** | Whisper trả 10 đoạn 6–17 s không dấu câu; meme neo ở cuối đoạn nên có thể trễ >10 s so với câu đùa. Cần tách đoạn theo khoảng lặng dùng timestamp theo từ (đã có `words`) trước khi dựng context |
+| **Meme mẫu còn trống chữ** | Template Imgflip (Batman tát Robin, Gru's plan…) để trống bong bóng thoại nên chèn vào vô nghĩa. Cần đánh dấu template cần chữ và không tự chọn |
+| **SFX lặp lại** | 4 lần cùng một âm "punch heavy" trong 90 s — SFX chưa có phạt trùng như meme |
+| Nhận dạng từ mượn tiếng Anh / từ lóng | "live được hai nền tảng" → "lấy lại được hai nền tảng"; "đổi gió" → "đổi giống như". Có thể thử `initial_prompt` (từ vựng stream + dấu câu) |
 | Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
 
@@ -143,7 +149,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **377 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **380 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -472,6 +478,45 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-17 (phiên 13) — Nghiệm thu trên livestream tiếng Việt thật (Claude Code)
+
+**Video.** `https://www.youtube.com/watch?v=GspiiW_G1BU` — livestream Gaming tiếng Việt, 2 giờ 28
+phút, kênh `@zzstardragonzz` (người dùng xác nhận chỉ dùng livestream của mình).
+
+**Chọn đoạn bằng dữ liệu, không đoán.** Không có heatmap (72 lượt xem). Tải riêng live chat (273
+tin, 15 người) và phụ đề tự động (~18.900 từ) → phút 36–37 vừa nhiều lời nói (165/159 từ/phút) vừa
+trùng lúc chat sôi nổi → chọn 36:00–37:30.
+
+**Chạy.** Máy đang mở VALORANT (GPU đã dùng 4,9/8 GB, 87°C) → `WHISPER_COMPUTE_TYPE=int8_float16`;
+Ollama tự chia một phần model sang CPU.
+
+```powershell
+$env:WHISPER_COMPUTE_TYPE="int8_float16"
+automeme -v run "https://www.youtube.com/watch?v=GspiiW_G1BU" --from 36:00 --to 37:30 --profile funny
+```
+
+Tổng 3 phút 59 giây: tải 54 s → Whisper 48 s (10 đoạn, 228 từ) → qwen3:8b ~100 s (giữ 7/10) →
+timeline + render 33 s. Video ra 1920×1080, đúng 90,000 s, còn tiếng, SFX được trộn (đỉnh âm tại
+24,6 s tăng từ −11,0 lên −9,2 dB); meme ở góc dưới phải, không che facecam góc dưới trái.
+
+**Đánh giá.** Transcript nghe ra đúng ý chính (so với phụ đề tự động của YouTube: 228 vs 256 từ)
+nhưng sai từ mượn/từ lóng và không có dấu câu. Chất lượng dựng **chưa đạt**: quá dày, meme neo
+cuối đoạn dài, template trống chữ, SFX lặp — chi tiết ở mục 2 "Chưa làm được".
+
+**Lỗi đã sửa theo `/sua-loi`** (test tái hiện đỏ trước):
+1. **Cooldown đo lệch:** analyzer/builder đo đầu→đầu (đúng ví dụ SPEC §32) nhưng validator (viết ở
+   Iteration 2) đo cuối→đầu → timeline tự dựng bị chính validator cảnh báo "event_008 → event_010
+   chỉ cách 5,4 s". Validator giờ đo đầu→đầu.
+2. **Meme khổ dọc cao gần hết màn hình** (GIF Confused Travolta rộng 30% nhưng cao ~95% khung):
+   thêm `meme.max_height_ratio` (0,45), filter `scale=w=…:h=…:force_original_aspect_ratio=decrease:
+   force_divisible_by=2`. Render lại cùng timeline: GIF gọn trong 45% chiều cao.
+3. Lệnh `render` báo "Đã chèn 11 meme" cho 7 meme + 4 SFX → giờ đếm riêng, bỏ sự kiện bị Reject.
+
+377 → **380 test**, ruff sạch.
+
+**Việc tiếp theo (chờ người dùng chọn):** tách đoạn transcript theo khoảng lặng; siết số meme
+(điểm phân biệt + top-K); bỏ template trống chữ khỏi tự chọn; phạt SFX trùng.
 
 ### 2026-09-17 (phiên 12) — Tải video YouTube bằng yt-dlp (Claude Code)
 

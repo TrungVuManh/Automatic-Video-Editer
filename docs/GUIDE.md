@@ -561,7 +561,7 @@ file này từ `analysis.json` và các thư viện local; bạn vẫn có thể
 | `duration` | có | Meme hiện bao lâu (giây) |
 | `asset` | có | Đường dẫn ảnh/GIF, tính từ thư mục gốc dự án (hoặc từ `assets/`) |
 | `position` | không | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`. Bỏ trống = `meme.position_default` |
-| `scale` | không | Bề rộng meme so với bề rộng video, 0.05–1.0. Bỏ trống = `meme.scale_default` (0.30) |
+| `scale` | không | Bề rộng meme so với bề rộng video, 0.05–1.0. Bỏ trống = `meme.scale_default` (0.30). Chiều cao luôn bị giới hạn ở `meme.max_height_ratio` (45% khung) để meme khổ dọc không che nửa màn hình; tỉ lệ ảnh được giữ nguyên |
 | `volume` | không | Chỉ cho SFX, từ 0 đến 1; mặc định 0.25 |
 | `mode` | không | Hiện chỉ có `overlay` (đè lên video) |
 | `status` | không | `pending`, `accepted`, `rejected`; renderer bỏ qua sự kiện `rejected` |

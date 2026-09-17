@@ -96,6 +96,7 @@ class MemeSettings(_Section):
     scale_default: float = Field(ge=0.05, le=1.0)
     position_default: Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
     margin_ratio: float = Field(ge=0, le=0.2)
+    max_height_ratio: float = Field(ge=0.1, le=1.0)
 
     @model_validator(mode="after")
     def _min_khong_vuot_max(self) -> MemeSettings:

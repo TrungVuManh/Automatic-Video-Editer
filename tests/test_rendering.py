@@ -19,7 +19,7 @@ def _event(**kw) -> MemeEvent:
 
 def _plan(events, assets, **kw):
     cfg = {"video_w": 1920, "video_h": 1080, "scale_default": 0.30,
-           "position_default": "bottom-right", "margin_ratio": 0.03}
+           "position_default": "bottom-right", "margin_ratio": 0.03, "max_height_ratio": 0.45}
     return build_render_plan(events, assets, **{**cfg, **kw})
 
 
@@ -32,18 +32,19 @@ def test_khong_co_su_kien_thi_khong_loc_gi():
 def test_filter_cho_mot_meme():
     plan = _plan([_event()], [Path("x.png")])
     assert plan.filter_complex == (
-        "[1:v]scale=576:-2,setpts=PTS-STARTPTS+1.000/TB[m0];"
+        "[1:v]scale=w=576:h=486:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+        "setpts=PTS-STARTPTS+1.000/TB[m0];"
         "[0:v][m0]overlay=W-w-58:H-h-58:enable='between(t,1.000,2.500)':eof_action=pass[v]"
     )
     assert plan.out_label == "[v]"
 
 
 def test_be_rong_meme_bang_30_phan_tram_khung_va_luon_chan():
-    assert "scale=576:-2" in _plan([_event()], [Path("x.png")]).filter_complex        # 30% × 1920
-    assert "scale=324:-2" in _plan([_event()], [Path("x.png")],
+    assert "scale=w=576:h=486:" in _plan([_event()], [Path("x.png")]).filter_complex  # 30% × 1920
+    assert "scale=w=324:h=864:" in _plan([_event()], [Path("x.png")],
                                    video_w=1080, video_h=1920).filter_complex          # 30% × 1080
     # scale riêng của sự kiện thắng mặc định; 0.2 × 1005 = 201 → làm tròn xuống số chẵn
-    assert "scale=200:-2" in _plan([_event(scale=0.2)], [Path("x.png")],
+    assert "scale=w=200:h=486:" in _plan([_event(scale=0.2)], [Path("x.png")],
                                    video_w=1005).filter_complex
 
 
@@ -321,3 +322,12 @@ def test_render_ghi_file_tam_roi_doi_ten(du_an):
                audio_codec="aac")
     assert not out.exists()
     assert not list(tmp_path.glob("*.part*"))
+
+
+def test_meme_doc_bi_gioi_han_chieu_cao():
+    """Lỗi thật khi nghiệm thu livestream: GIF khổ dọc rộng 30% khung nhưng cao gần hết màn hình.
+
+    Kẹp cả rộng lẫn cao, giữ tỉ lệ (force_original_aspect_ratio=decrease), cạnh luôn chẵn.
+    """
+    fc = _plan([_event()], [Path("doc.gif")], max_height_ratio=0.45).filter_complex
+    assert "scale=w=576:h=486:force_original_aspect_ratio=decrease:force_divisible_by=2" in fc

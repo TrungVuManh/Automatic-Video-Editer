@@ -277,3 +277,20 @@ def test_run_file_co_san_kem_from_to_thi_bao_loi(monkeypatch):
     monkeypatch.setattr(pipeline, "run_video", lambda *a, **k: pytest.fail("không được chạy"))
     r = runner.invoke(app, ["run", "v.mp4", "--from", "0:30"])
     assert r.exit_code == 1 and "chỉ dùng với link YouTube" in r.output
+
+
+def test_render_dem_rieng_meme_sfx_va_bo_su_kien_bi_reject(monkeypatch, tmp_path):
+    """Lỗi thật khi nghiệm thu livestream: 7 meme + 4 SFX bị báo thành "Đã chèn 11 meme"."""
+    import automeme.pipeline as pipeline
+    from automeme.timeline.schema import MemeEvent, SfxEvent, Timeline
+
+    tl = Timeline(video="v.mp4", events=[
+        MemeEvent(id="m1", start=1, duration=1, asset="a.png"),
+        MemeEvent(id="m2", start=9, duration=1, asset="b.png", status="rejected"),
+        SfxEvent(id="s1", start=1, duration=0.5, asset="hit.ogg", volume=0.3),
+    ])
+    monkeypatch.setattr(pipeline, "render_timeline",
+                        lambda video, settings, **kw: (tmp_path / "o.mp4", tl))
+    r = runner.invoke(app, ["render", "v.mp4"])
+    assert r.exit_code == 0, r.output
+    assert "Đã dựng 1 meme + 1 SFX" in r.output

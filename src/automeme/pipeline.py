@@ -301,6 +301,7 @@ def render_timeline(video: Path, settings: Settings, *, timeline_path: Path | No
                              scale_default=settings.meme.scale_default,
                              position_default=settings.meme.position_default,
                              margin_ratio=settings.meme.margin_ratio,
+                             max_height_ratio=settings.meme.max_height_ratio,
                              has_audio=thong_tin.has_audio)
     log.info("Render %d sự kiện vào %s...", len(events), video.name)
     render(video, out, plan, video_codec=settings.output.video_codec, crf=settings.output.crf,

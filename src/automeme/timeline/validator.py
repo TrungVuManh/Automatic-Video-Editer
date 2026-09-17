@@ -100,9 +100,12 @@ def _kiem_tra_mat_do(events: list[MemeEvent], video_duration: float | None, cfg)
     timeline viết tay là quyền của người dùng."""
     canh_bao = []
     for a, b in zip(events, events[1:], strict=False):
-        cach = b.start - a.end
+        # Đo từ lúc meme trước BẮT ĐẦU, giống SPEC §32 ("00:05 meme → 00:13 được giữ" với
+        # cooldown 7s) và giống bộ lọc của analyzer/builder. Đo từ lúc kết thúc thì timeline do
+        # chính hệ thống dựng bị báo vi phạm.
+        cach = b.start - a.start
         if cach < cfg.cooldown:
-            canh_bao.append(f"{a.id} → {b.id} chỉ cách {cach:.1f}s, dưới cooldown "
+            canh_bao.append(f"{a.id} → {b.id} bắt đầu cách nhau {cach:.1f}s, dưới cooldown "
                             f"{cfg.cooldown}s")
     if video_duration and video_duration > 0:
         # Cùng công thức với analyzer/detector.py: video ngắn vẫn được ít nhất 1 meme. Chia thẳng
