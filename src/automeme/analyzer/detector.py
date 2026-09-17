@@ -81,14 +81,15 @@ def filter_opportunities(
         remaining = video_duration - start
         if remaining < settings.duration_min:
             continue
+        # Làm tròn tới mili giây: cộng trừ float để lại đuôi kiểu 1.129999999999999
         timing = MemeTiming(
-            anchor=context.end,
-            delay=settings.timing_delay,
-            duration=min(
+            anchor=round(context.end, 3),
+            delay=round(settings.timing_delay, 3),
+            duration=round(min(
                 settings.duration_max,
                 remaining,
                 max(settings.duration_min, item.timing.duration),
-            ),
+            ), 3),
         )
         normalized.append(item.model_copy(update={"timing": timing}))
 

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from ..utils.logger import log
 from .base import MemeProvider, MemeProviderError
+from .matching import match_score
 from .schema import MemeCandidate
 
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".mov"}
@@ -78,11 +79,11 @@ def tokenize(text: str) -> set[str]:
 
 
 def local_semantic_score(query: str, candidate: MemeCandidate) -> float:
-    """Fallback lexical nhẹ; semantic search thật do Meme Search đảm nhiệm."""
-    query_tokens = tokenize(query)
-    if not query_tokens:
-        return 0
-    metadata = " ".join([
+    """Fallback lexical nhẹ; semantic search thật do Meme Search đảm nhiệm.
+
+    So khớp giữ dấu tiếng Việt (xem `matching.py`) — `tokenize` bỏ dấu chỉ dùng để sinh ID/tag.
+    """
+    return match_score(query, [
         candidate.id,
         candidate.filename,
         candidate.description,
@@ -90,9 +91,6 @@ def local_semantic_score(query: str, candidate: MemeCandidate) -> float:
         *candidate.emotion,
         *candidate.style,
     ])
-    matched = query_tokens & tokenize(metadata)
-    phrase_bonus = 0.15 if query.casefold() in metadata.casefold() else 0
-    return min(1.0, len(matched) / len(query_tokens) + phrase_bonus)
 
 
 class LocalMemeProvider(MemeProvider):

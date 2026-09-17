@@ -10,6 +10,7 @@ Trả về hai danh sách:
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from pathlib import Path
 
@@ -104,10 +105,13 @@ def _kiem_tra_mat_do(events: list[MemeEvent], video_duration: float | None, cfg)
             canh_bao.append(f"{a.id} → {b.id} chỉ cách {cach:.1f}s, dưới cooldown "
                             f"{cfg.cooldown}s")
     if video_duration and video_duration > 0:
-        mat_do = len(events) / (video_duration / 60)
-        if mat_do > cfg.max_memes_per_minute:
-            canh_bao.append(f"mật độ {mat_do:.1f} meme/phút, vượt mức "
-                            f"{cfg.max_memes_per_minute} trong cấu hình")
+        # Cùng công thức với analyzer/detector.py: video ngắn vẫn được ít nhất 1 meme. Chia thẳng
+        # số meme cho thời lượng thì 1 meme trong video 12 giây đã thành "5 meme/phút".
+        toi_da = max(1, math.floor(video_duration * cfg.max_memes_per_minute / 60))
+        if len(events) > toi_da:
+            canh_bao.append(f"{len(events)} meme, vượt mức {toi_da} cho video dài "
+                            f"{format_ts(video_duration)} ({cfg.max_memes_per_minute} "
+                            f"meme/phút trong cấu hình)")
     return canh_bao
 
 

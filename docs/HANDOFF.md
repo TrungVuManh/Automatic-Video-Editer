@@ -39,6 +39,7 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/memes/animated.py` + `catalog/` | Kho GIF động | 30 reaction GIF từ GitHub ghim SHA; kiểm tra allowlist/MIME/kích thước/số frame, nhãn semantic và 2 mục `safe=false` |
 | `src/automeme/sfx/` + `catalog/` | Kho SFX CC0 | 30 âm Kenney có nhãn Việt–Anh; downloader ghim SHA/allowlist, kiểm tra MIME/kích thước/OggS, provider local tìm semantic |
 | `src/automeme/memes/meme_search.py` | Meme Search API v1 | Vector search qua HTTP, bearer token, fallback local; chỉ tải ứng viên đã chọn vào cache bằng file tạm |
+| `src/automeme/memes/matching.py` | So khớp tìm kiếm | `match_score(query, fields)`: giữ dấu tiếng Việt, khớp cụm âm tiết (quy hoạch động), âm tiết lẻ 0,5 điểm; dùng cho meme local, ranker và SFX |
 | `src/automeme/memes/ranker.py` | Xếp hạng | Hàm thuần kết hợp semantic, emotion, style, quality, novelty và phạt meme vừa dùng |
 | `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video |
 | `src/automeme/review/` | Web UI local | Preview video/meme/transcript; accept/reject/replace/chỉnh timing; API loopback có token; nút render |
@@ -103,7 +104,8 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Schema + kiểm tra timeline | Xong | 25 test, thông báo lỗi chỉ rõ "sự kiện #n → khóa" |
 | `automeme inspect` | Xong | Chạy thật, cảnh báo đúng cooldown và mật độ |
 | `automeme render` (ảnh, GIF, vùng trong suốt) | Xong | Chạy thật; trích khung hình kiểm tra meme hiện đúng lúc, đúng góc; giữ nguyên tiếng gốc |
-| `automeme analyze` (Ollama/Claude) | Xong | 18 test mới chạy offline: schema, context, retry, bộ lọc, resume, CLI và adapter |
+| `automeme analyze` (Ollama/Claude) | Xong | Test offline; **2026-09-17 chạy thật với Ollama `qwen3:8b`**: chọn đúng câu punchline, lý do tiếng Việt hợp lý, structured output hợp lệ |
+| Nghiệm thu `automeme run` với model thật | Xong (trừ tiếng Việt) | 2026-09-17: Whisper large-v3 + qwen3:8b + kho 130 meme thật → MP4 trong 1 phút 51 giây; kiểm tra khung hình meme hiện đúng lúc, đúng góc |
 | Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
 | Catalog 100 meme phổ biến có nhãn | Xong | Đã tải thật 100/100; test catalog, tải/tái sử dụng, nhãn song ngữ, safe filter, CLI và Studio API |
 | Catalog 30 reaction GIF có nhãn | Xong | Đã tải thật 30/30; mọi file 7–293 frame, test parser GIF, URL ghim SHA, semantic search, CLI và Studio API |
@@ -121,8 +123,9 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Chất lượng nhận dạng **tiếng Việt** | Chưa có video tiếng Việt thật để đo. Windows của người dùng không có giọng đọc tiếng Việt nên mẫu thử phải dùng giọng tiếng Anh |
 | Tốc độ trên video dài (vài phút trở lên) | Mới thử video 11,7 giây |
 | Đường chạy CPU (`WHISPER_DEVICE=cpu`) | Chưa thử; máy có GPU nên mặc định chạy GPU |
-| Chạy `automeme analyze` với model thật | Máy chưa cài ứng dụng Ollama/model `qwen3:8b`; code và SDK Python đã sẵn sàng |
-| Chạy trọn pipeline với Ollama + Meme Search thật | Máy chưa có ứng dụng/model Ollama và dịch vụ Meme Search chưa được khởi chạy; local provider vẫn dùng được |
+| Chạy trọn pipeline với Meme Search thật | Dịch vụ Meme Search chưa được khởi chạy; đã nghiệm thu với local provider |
+| Tìm kiếm local hiểu từ đồng nghĩa | Local provider so khớp chữ: "tiết lộ" không khớp "bị nói trúng", nên khi nghiệm thu meme lý tưởng (Monkey Puppet) chưa được chọn. Hướng xử lý: Meme Search (vector), hoặc mở rộng truy vấn bằng ontology Việt–Anh sẵn có — cần người dùng chọn |
+| Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
 | Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
@@ -135,7 +138,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **264 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **281 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -145,7 +148,11 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 - Windows 11. Python trên PATH là bản *embeddable* 3.13 (không có venv) → dự án dùng `.venv`
   dựng từ Python 3.11.9. **Venv không được kích hoạt sẵn**: gọi qua `.venv\Scripts\...`.
 - FFmpeg 9.0.1 (winget), GPU RTX 4060 Laptop **8 GB VRAM**, Docker, gh, git.
-- **Đã có SDK Python:** `ollama==0.6.2`, `anthropic==1.4.0`. **Chưa có:** ứng dụng Ollama/model, file `.env`.
+- **Đã có SDK Python:** `ollama==0.6.2`, `anthropic==1.4.0`.
+- **Đã có (kiểm tra 2026-09-17):** ứng dụng Ollama 0.34.0 (chưa tự chạy khi mở máy — cần mở app
+  hoặc `ollama serve`) và model `qwen3:8b` 5,2 GB. **Chưa có:** file `.env`.
+- **Ổ C chỉ còn ~9,6 GB trống** (model Whisper/HF cache và Ollama đều nằm ở C). Nếu tải thêm
+  model, cân nhắc đặt `HF_HOME` / `OLLAMA_MODELS` sang ổ D.
 - 8 GB VRAM đủ cho Whisper large-v3 *hoặc* qwen3:8b, không đủ nạp cả hai cùng lúc → phải giải
   phóng Whisper trước khi gọi Ollama (Ollama giữ model trong VRAM ~5 phút sau lần gọi cuối).
 
@@ -213,6 +220,18 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
     public. Analysis key phụ thuộc video/transcript/prompt/LLM/bộ lọc; timeline key phụ thuộc
     analysis/provider/thư viện/ranking; render key phụ thuộc video/timeline/assets/codec. Timeline
     hoặc output bị sửa ngoài automeme được giữ lại, chỉ `--force` mới ghi đè.
+
+**2026-09-17 — sửa lỗi phát hiện khi nghiệm thu:**
+
+- So khớp tìm kiếm (meme local, ranker emotion/style, SFX) chuyển sang `memes/matching.py`:
+  **giữ dấu tiếng Việt**, khớp theo cụm âm tiết bằng quy hoạch động, âm tiết khớp lẻ trong truy
+  vấn nhiều âm tiết được 0,5 điểm; truy vấn gõ không dấu thì so ở dạng bỏ dấu như cũ.
+  `local.tokenize` (bỏ dấu) giữ nguyên, chỉ còn dùng để sinh ID/tag từ tên file.
+- Bỏ `phrase_bonus` cũ: với cách chấm mới, truy vấn khớp trọn đã đạt 1,0; còn phép `in` chuỗi
+  con có thể cộng nhầm ("lo" nằm trong "lorem").
+- Cảnh báo mật độ trong `validate_timeline` dùng cùng công thức với `analyzer/detector.py`:
+  `max(1, floor(thời lượng × meme/phút / 60))`.
+- Timing trong analysis làm tròn tới mili giây.
 
 **2026-09-12 — Iteration 2:**
 
@@ -320,8 +339,9 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 
 ### Tiếp theo
 
-Chạy nghiệm thu bằng video tiếng Việt, Ollama và kho meme thật; kiểm tra thêm media meme dạng
-video. Sau đó mới mở rộng cutaway/SFX/caption hoặc scene understanding nếu cần.
+Đã nghiệm thu với Ollama + kho meme thật (2026-09-17). Còn: nghiệm thu bằng video tiếng Việt;
+cải thiện chọn meme khi không có Meme Search (tìm kiếm chữ không hiểu đồng nghĩa); kiểm tra thêm
+media meme dạng video. Sau đó mới mở rộng cutaway/SFX/caption hoặc scene understanding nếu cần.
 Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke → `CaptionEvent`),
 `layout.py` (khung dọc 9:16), `claude_api.py`.
 
@@ -409,6 +429,44 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-17 (phiên 11) — Nghiệm thu với model thật + sửa tìm kiếm tiếng Việt (Claude Code)
+
+**Kiểm tra đầu phiên.** 5 commit của phiên 6–10 chưa push; đã soát: không có file media, file
+lớn hay khóa bí mật. 264 test xanh. Ollama 0.34.0 đã cài, `qwen3:8b` đã tải; server phải bật tay.
+
+**Nghiệm thu thật** (video mẫu 11,68 giây giọng đọc tiếng Anh, vì vẫn chưa có video tiếng Việt):
+
+```powershell
+$env:WHISPER_LANGUAGE="en"; automeme -v run data\input\nghiem-thu-en.mp4 --profile funny
+```
+
+Toàn luồng 1 phút 51 giây: Whisper nạp 12 s + nhận dạng 3 s; Ollama nạp model lần đầu ~80 s,
+mỗi đoạn sau ~6 s. qwen3 chọn **đúng** câu punchline "well my wife keeps it for me"
+(confidence 0,9, lý do tiếng Việt hợp lý); meme đặt ở 10,55 s ngay sau câu nói. Video ra giữ
+nguyên thời lượng và tiếng.
+
+**Ba lỗi phát hiện, đã sửa theo quy trình `/sua-loi`** (test tái hiện đỏ trước, xanh sau):
+
+1. **Chọn sai meme vì tìm kiếm bỏ dấu.** Truy vấn "ngượng bất ngờ tiết lộ" → token
+   {nguong, bat, ngo, tiet, lo}; meme ba đầu rồng ("ngớ ngẩn nổi **bật**") được 0,60 điểm, còn
+   Monkey Puppet ("ngượng ngùng, bị nói trúng") chỉ 0,20. Sửa bằng `memes/matching.py`; đã so
+   sánh công thức trên kho thật với 10 truy vấn trước khi chọn. Sau sửa, cùng analysis đó chọn
+   Anakin/Padme ("im lặng đáng ngờ", nhãn awkward) — hợp cảm xúc "ngượng" hơn hẳn.
+2. **Báo nhầm mật độ:** 1 meme trong video 11,68 s bị cảnh báo "5,1 meme/phút > 5".
+3. **Sai số float:** `analysis.json` ghi `duration: 1.129999999999999`.
+
+264 → **281 test** (5 test tái hiện lỗi + 12 test cho `matching.py`), ruff sạch. Cập nhật GUIDE
+(cách tìm kiếm local so khớp, công thức mật độ).
+
+**Còn tồn tại.**
+- Chất lượng nhận dạng tiếng Việt — vẫn cần video tiếng Việt thật.
+- Tìm kiếm chữ không hiểu đồng nghĩa nên chưa chọn được meme lý tưởng (xem "Chưa làm được").
+- `search_query` dạng từ khóa và `trigger` là nhãn thay vì câu thoại (prompt/schema).
+- Ollama nạp model lần đầu ~80 s; cảnh báo timeline in hai lần (sau khi dựng và trước khi render).
+
+**Việc tiếp theo:** người dùng cung cấp video tiếng Việt để nghiệm thu nốt; quyết định hướng cải
+thiện chọn meme (Meme Search hay mở rộng truy vấn bằng ontology).
 
 ### 2026-09-13 (phiên 10) — Sound effect CC0 end-to-end (Codex)
 

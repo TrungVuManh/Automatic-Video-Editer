@@ -186,3 +186,11 @@ def test_create_llm_theo_config():
     assert isinstance(create_llm(load_settings(env={})), OllamaLLM)
     settings = load_settings(env={"LLM_BACKEND": "claude"})
     assert isinstance(create_llm(settings), ClaudeLLM)
+
+
+def test_timing_lam_tron_khong_de_sai_so_float():
+    """Lỗi thật khi nghiệm thu: analysis.json ghi duration 1.129999999999999."""
+    context = ContextWindow(0, 8.14, 10.4, (), "A", ())
+    cfg = FilterSettings(0, 0, 5, 0.8, 2.5, 0.15)
+    found = filter_opportunities([opportunity(duration=1.5)], [context], cfg, video_duration=11.68)
+    assert found[0].timing.duration == 1.13

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from ..analyzer.schema import MemeOpportunity
 from ..config import RankingSettings
-from .local import tokenize
+from .matching import match_score
 from .schema import MemeCandidate
 
 
@@ -59,8 +59,4 @@ def rank_memes(opportunity: MemeOpportunity, candidates: list[MemeCandidate],
 
 
 def _overlap_score(wanted: str, values: list[str]) -> float:
-    wanted_tokens = tokenize(wanted)
-    if not wanted_tokens:
-        return 0
-    available = tokenize(" ".join(values))
-    return len(wanted_tokens & available) / len(wanted_tokens)
+    return match_score(wanted, values)

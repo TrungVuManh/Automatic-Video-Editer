@@ -236,3 +236,43 @@ def test_fallback_khi_api_hong():
 def test_factory_khong_token_thi_chi_dung_local(tmp_path):
     settings = load_settings(env={}, root=tmp_path)
     assert isinstance(create_meme_provider(settings), LocalMemeProvider)
+
+
+# ------------------------------------------------------------------ tiếng Việt có dấu
+# Lỗi thật khi nghiệm thu 2026-09-17: tìm kiếm bỏ dấu nên "bất ngờ" khớp nhầm
+# "ngớ ngẩn nổi bật", chọn meme ba đầu rồng cho một câu cần phản ứng ngượng/bất ngờ.
+RONG_BA_DAU = {
+    "id": "rong-ba-dau", "filename": "assets/memes/rong.jpg", "type": "image",
+    "tags": ["awkward", "ngượng", "quê"], "emotion": ["awkward", "xấu hổ"],
+    "style": ["reaction"],
+    "description": "Một thành viên ngớ ngẩn nổi bật giữa hai người nghiêm túc.",
+}
+LUON_LA_VAY = {
+    "id": "luon-la-vay", "filename": "assets/memes/luon.png", "type": "image",
+    "tags": ["reveal"], "emotion": ["shock"], "style": ["reaction"],
+    "description": "Nhận ra một sự thật bất ngờ vốn luôn như vậy từ trước.",
+}
+
+
+def test_tim_kiem_giu_dau_khong_khop_nham_am_tiet():
+    assert local_semantic_score("bất ngờ", candidate(**RONG_BA_DAU)) == 0
+    # "nỗi" không được khớp "nói"
+    nguoi_noi = candidate(tags=[], emotion=[], style=[], description="Gật gù xác nhận lời vừa nói")
+    assert local_semantic_score("giấu nỗi đau", nguoi_noi) == 0
+
+
+def test_tim_kiem_truy_van_llm_that_khong_chon_rong_ba_dau(tmp_path):
+    assets = tmp_path / "assets" / "memes"
+    assets.mkdir(parents=True)
+    library = assets / "library.jsonl"
+    library.write_text("\n".join(
+        candidate(**item).model_dump_json(exclude={"semantic_score"})
+        for item in (RONG_BA_DAU, LUON_LA_VAY)
+    ), encoding="utf-8")
+    provider = LocalMemeProvider(library_file=library, asset_dirs=[assets], project_root=tmp_path)
+    found = provider.search("ngượng bất ngờ tiết lộ", 10)
+    assert found[0].id == "luon-la-vay"
+
+
+def test_truy_van_khong_dau_van_tim_duoc_metadata_co_dau():
+    assert local_semantic_score("bat ngo", candidate(**LUON_LA_VAY)) == 1

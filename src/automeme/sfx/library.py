@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import Settings
-from ..memes.local import tokenize
+from ..memes.matching import match_score
 from ..memes.popular import InstallResult
 from ..utils.files import read_json
 from ..utils.logger import log
@@ -96,19 +96,14 @@ class LocalSfxProvider:
         self._items: list[SfxCandidate] | None = None
 
     def search(self, query: str, limit: int = 10) -> list[SfxCandidate]:
-        query_tokens = tokenize(query)
-        if not query_tokens:
-            return []
         scored: list[SfxCandidate] = []
         for item in self._load():
             if not item.safe:
                 continue
-            metadata = " ".join([item.id, item.description, *item.tags, *item.emotion, *item.style])
-            matched = query_tokens & tokenize(metadata)
-            if not matched:
+            score = match_score(query, [item.id, item.description, *item.tags,
+                                        *item.emotion, *item.style])
+            if score <= 0:
                 continue
-            phrase_bonus = 0.15 if query.casefold() in metadata.casefold() else 0
-            score = min(1.0, len(matched) / len(query_tokens) + phrase_bonus)
             scored.append(item.model_copy(update={"semantic_score": score}))
         return sorted(
             scored, key=lambda item: (-item.semantic_score, -item.quality, item.id)

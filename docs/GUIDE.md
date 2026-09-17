@@ -221,7 +221,9 @@ không đổi được nó nữa.
 | `funny` | 5 | 6 giây | 0.65 | 0.8–2.5 giây |
 | `chaotic` | 9 | 3 giây | 0.5 | 0.8–2.5 giây |
 
-- **`max_memes_per_minute`** — trần mật độ.
+- **`max_memes_per_minute`** — trần mật độ. Số meme tối đa của cả video là
+  `max(1, làm tròn xuống(thời lượng tính bằng phút × giá trị này))`, nên video ngắn vẫn được
+  ít nhất 1 meme (video 12 giây với giá trị 5 → tối đa 1 meme).
 - **`cooldown`** — khoảng cách tối thiểu giữa hai meme. Với 7 giây: có meme ở 00:05 thì ứng
   viên ở 00:08 bị loại, ứng viên ở 00:13 được giữ.
 - **`threshold`** — LLM tự chấm độ chắc chắn 0–1 cho mỗi khoảnh khắc; thấp hơn ngưỡng thì bỏ.
@@ -422,6 +424,17 @@ Mỗi dòng là một JSON object gồm `id`, `filename`, `type`, `tags`, `emoti
 `license_note` nếu có. Đặt `safe=false` để meme không bao giờ được chọn. Một dòng hỏng chỉ bị
 bỏ riêng và log chỉ rõ số dòng. Template Imgflip là nội dung do người dùng đăng; hãy đọc nguồn
 và tự kiểm tra quyền sử dụng trước khi xuất bản, nhất là nội dung thương mại.
+
+**Cách tìm kiếm local so khớp** (khi không dùng Meme Search):
+
+- **Phân biệt dấu:** "bất ngờ" không khớp "nổi bật" hay "ngớ ngẩn". Gõ truy vấn **không dấu**
+  ("bat ngo") thì mới so không phân biệt dấu.
+- **Ưu tiên cả cụm:** "chờ đợi" khớp "chờ đợi quá lâu" tốt hơn "mong chờ"; một âm tiết khớp lẻ
+  trong từ nhiều âm tiết chỉ được nửa điểm.
+- **Không hiểu từ đồng nghĩa:** "tiết lộ" không tự khớp "bị nói trúng". Khi viết `description`
+  và `tags`, dùng những từ AI hay dùng cho tình huống đó — xem taxonomy trong
+  `prompts/meme_detector.txt` (ngượng, sốc, bối rối, giấu nỗi đau…). Muốn tìm theo ý nghĩa
+  thật sự thì dùng Meme Search bên dưới.
 
 Nếu muốn tìm semantic bằng Meme Search, chạy dịch vụ trên loopback rồi tạo token có hai scope
 `search:read,media:read`:

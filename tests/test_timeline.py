@@ -220,3 +220,11 @@ def test_bang_inspect_co_du_thong_tin():
 
     text_loi = format_timeline_table(tl, ["thiếu file"], [])
     assert "[LỖI]      thiếu file" in text_loi and "chưa render được" in text_loi
+
+
+def test_mot_meme_trong_video_ngan_khong_bi_bao_qua_day(settings):
+    """Lỗi thật khi nghiệm thu: 1 meme trong video 11,68 giây bị báo 5,1 meme/phút > 5."""
+    tl = _tl({"id": "e1", "start": 10.55, "duration": 1.13, "asset": "a.png"})
+    _, canh_bao = validate_timeline(tl, video_duration=11.68, asset_paths={"a.png": Path("a.png")},
+                                    editing_cfg=settings.editing, ton_tai=_co_file)
+    assert not any("meme/phút" in c for c in canh_bao)
