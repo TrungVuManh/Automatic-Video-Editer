@@ -125,23 +125,31 @@ def build_timeline(
             and sfx_settings.enabled
             and (cut_sfx or _sfx_density_allows(start, sfx_history, video_duration, sfx_settings))
         ):
-            query = opportunity.sfx_query or (cutaway_settings.sfx_query if cut_sfx else "")
-            if not query:
+            # Cú cắt: truy vấn của AI không còn file nào chưa dùng gần đây thì thử truy vấn mặc
+            # định — cú cắt thiếu âm nghe hụt hẫng (lỗi thật khi nghiệm thu livestream).
+            queries = [q for q in dict.fromkeys([
+                opportunity.sfx_query.strip(),
+                cutaway_settings.sfx_query.strip() if cut_sfx else "",
+            ]) if q]
+            if not queries:
                 continue
             recent_sfx = {
                 sfx_id for sfx_id, used_at in sfx_used
                 if start - used_at <= ranking_settings.recent_window
             }
-            matches = sfx_provider.search(query, top_k)
-            selected_sfx = next(
-                (item for item in matches
-                 if item.semantic_score >= sfx_settings.score_threshold
-                 and item.id not in recent_sfx),
-                None,
-            )
+            selected_sfx = None
+            for query in queries:
+                selected_sfx = next(
+                    (item for item in sfx_provider.search(query, top_k)
+                     if item.semantic_score >= sfx_settings.score_threshold
+                     and item.id not in recent_sfx),
+                    None,
+                )
+                if selected_sfx is not None:
+                    break
             if selected_sfx is None:
                 log.warning("Không có SFX đủ khớp (và chưa dùng gần đây) cho đoạn %d (%s).",
-                            opportunity.segment_id, query)
+                            opportunity.segment_id, " / ".join(queries))
                 continue
             try:
                 sfx_asset = sfx_provider.materialize(selected_sfx)
@@ -157,7 +165,9 @@ def build_timeline(
                     start=round(start, 3),
                     duration=round(duration, 3),
                     asset=_portable_path(sfx_asset, project_root),
-                    volume=round(sfx_settings.volume * selected_sfx.recommended_volume, 3),
+                    volume=round(
+                        (cutaway_settings.sfx_volume if cut_sfx else sfx_settings.volume)
+                        * selected_sfx.recommended_volume, 3),
                     confidence=opportunity.confidence,
                     query=query,
                     reason=opportunity.reason,
@@ -170,7 +180,9 @@ def build_timeline(
 def pick_cutaways(opportunities: Sequence[MemeOpportunity], settings: CutawaySettings | None,
                   video_duration: float | None) -> set[int]:
     """Chỉ số các cơ hội được cắt tràn màn hình: tự tin nhất trước, cách nhau ≥ cooldown
-    (đầu → đầu), tối đa `max(1, floor(thời lượng × max_per_minute / 60))`. Hàm thuần."""
+    (đầu → đầu), tối đa `max(1, floor(thời lượng × max_per_minute / 60))` và không quá
+    `max_share` số meme. Cùng độ tự tin thì ưu tiên khoảnh khắc AI đề xuất cả SFX (tín hiệu
+    mạnh hơn), rồi đến khoảnh khắc sớm hơn. Hàm thuần."""
     if settings is None or settings.mode != "auto":
         return set()
     ung_vien = [
@@ -179,9 +191,11 @@ def pick_cutaways(opportunities: Sequence[MemeOpportunity], settings: CutawaySet
     ]
     toi_da = (max(1, math.floor(video_duration * settings.max_per_minute / 60))
               if video_duration else len(ung_vien))
+    so_meme = sum(1 for o in opportunities if o.insert_meme)
+    toi_da = min(toi_da, max(1, math.floor(so_meme * settings.max_share)))
     chon: list[int] = []
-    # sắp theo độ tự tin giảm dần; bằng nhau thì khoảnh khắc sớm hơn trước (sort ổn định)
-    for i, o in sorted(ung_vien, key=lambda item: -item[1].confidence):
+    # sort ổn định: bằng điểm và cùng có/không SFX thì khoảnh khắc sớm hơn đứng trước
+    for i, o in sorted(ung_vien, key=lambda item: (-item[1].confidence, not item[1].insert_sfx)):
         if len(chon) >= toi_da:
             break
         start = _opportunity_start(o)

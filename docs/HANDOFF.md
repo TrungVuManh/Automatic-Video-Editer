@@ -29,8 +29,8 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/cli.py` | CLI Typer | Có thêm `install-sfx`; các lệnh doctor/install/transcribe/analyze/inspect/render/run/studio chạy được |
 | `src/automeme/pipeline.py` | Nối các bước | `transcribe_video(...)`, `analyze_video(...)`, `build_video_timeline(...)`, `render_timeline(...)`, `run_video(...)`; các backend đều tiêm được để test offline |
 | `src/automeme/cache.py` | Cache/invalidation | Manifest strict, hash ổn định, nhận biết fresh/stale/file bị sửa; manifest nằm ngoài artifact người dùng chỉnh |
-| `src/automeme/analyzer/context.py` | Context window | `build_context_windows`: mặc định 2 đoạn trước + 1 đoạn sau, cấu hình được |
-| `src/automeme/analyzer/schema.py` | Structured output | `MemeTiming`, `MemeOpportunity`, `Analysis`, load/save và tóm tắt; mọi model `extra="forbid"` |
+| `src/automeme/analyzer/context.py` | Context window | `build_context_windows`: mặc định 2 đoạn trước + 1 đoạn sau, cấu hình được; `split_long_segments` tách đoạn Whisper dài theo khoảng lặng giữa các từ (hàm thuần, không sửa transcript) |
+| `src/automeme/analyzer/schema.py` | Structured output | `MemeTiming`, `MemeOpportunity`, `Analysis`, load/save và tóm tắt; mọi model `extra="forbid"`; `insert_meme=false` thì `timing.duration` ngoài khoảng được kẹp lại thay vì loại cả câu trả lời |
 | `src/automeme/analyzer/llm.py` | Adapter LLM | Interface `StructuredLLM`; `OllamaLLM` dùng JSON Schema + `think=False`; `ClaudeLLM` dùng structured output |
 | `src/automeme/analyzer/detector.py` | Phân tích + bộ lọc | JSON sai thử lại 1 lần rồi bỏ riêng câu; code quyết định confidence, timing, duration, cooldown, mật độ |
 | `src/automeme/analyzer/prompt.py` | Prompt manager | Nạp `prompts/meme_detector.txt`, điền context và JSON Schema, giữ UTF-8 |
@@ -41,12 +41,12 @@ dày, xuất timeline sửa được, render, giữ nguyên audio gốc, xuất 
 | `src/automeme/memes/meme_search.py` | Meme Search API v1 | Vector search qua HTTP, bearer token, fallback local; chỉ tải ứng viên đã chọn vào cache bằng file tạm |
 | `src/automeme/memes/matching.py` | So khớp tìm kiếm | `match_score(query, fields)`: giữ dấu tiếng Việt, khớp cụm âm tiết (quy hoạch động), âm tiết lẻ 0,5 điểm; dùng cho meme local, ranker và SFX |
 | `src/automeme/memes/ranker.py` | Xếp hạng | Hàm thuần kết hợp semantic, emotion, style, quality, novelty và phạt meme vừa dùng |
-| `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video |
-| `src/automeme/review/` | Web UI local | Preview video/meme/transcript; accept/reject/replace/chỉnh timing; API loopback có token; nút render |
-| `src/automeme/studio/` | UI/UX đầy đủ | Dashboard, upload nguyên tử, job pipeline nền, editor waveform, transcript, render/download và CRUD metadata kho meme |
-| `src/automeme/timeline/schema.py` | Định dạng timeline | pydantic union `MemeEvent`/`SfxEvent` (`extra="forbid"`), tương thích timeline meme cũ |
-| `src/automeme/timeline/validator.py` | Ràng buộc cứng (SPEC §54) | `validate_timeline` → (lỗi chặn render, cảnh báo); `resolve_asset`; `format_timeline_table` cho lệnh inspect |
-| `src/automeme/rendering/filters.py` | Dựng filtergraph | `build_render_plan` (hàm thuần) → tham số `-i` + `filter_complex`; `vi_tri_overlay`, `input_cho_meme` |
+| `src/automeme/timeline/builder.py` | Sinh timeline | Xếp hạng top-K, thử ứng viên tiếp theo nếu materialize lỗi, giới hạn thời lượng theo video; `pick_cutaways` (cú cắt tràn màn hình), `prefer_animated`, `punch_zoom`, SFX chống lặp + truy vấn dự phòng cho cú cắt, loại `exclude_styles`, luân phiên `position_cycle` |
+| `src/automeme/review/` | Web UI local | Preview video/meme/transcript; accept/reject/replace/chỉnh timing, chế độ góc/tràn màn hình, độ phóng zoom; API loopback có token; nút render. `service.py` là lõi chung với Studio: `EventPatch` (thêm `mode`, `factor`), `rank_suggestions`, `ReviewSession.suggestions/add_meme/asset_file`, `new_event_id` |
+| `src/automeme/studio/` | UI/UX đầy đủ | Dashboard, upload nguyên tử, job pipeline nền, editor waveform, transcript, render/download và CRUD metadata kho meme; editor có công tắc góc/tràn màn hình, lưới gợi ý meme (`/api/suggestions`), chèn meme tại playhead (`/api/events/add`), chỉnh zoom, xem trước khớp render |
+| `src/automeme/timeline/schema.py` | Định dạng timeline | Union phân biệt theo `type` (`meme` mặc định/`sfx`/`zoom`), `extra="forbid"`, tương thích timeline meme cũ; `MemeEvent.mode` = `overlay`/`cutaway`; `ZoomEvent` không có asset (`has_asset`) |
+| `src/automeme/timeline/validator.py` | Ràng buộc cứng (SPEC §54) | `validate_timeline` → (lỗi chặn render, cảnh báo); `resolve_asset`; `format_timeline_table` cho lệnh inspect; meme trùng giờ với cú cắt tràn màn hình và hai zoom trùng giờ là lỗi |
+| `src/automeme/rendering/filters.py` | Dựng filtergraph | `build_render_plan` (hàm thuần) → tham số `-i` + `filter_complex`; `vi_tri_overlay`, `input_cho_meme`; `cutaway_chain` (nền mờ + meme 92% + phóng nhẹ + mờ dần), `zoom_expr`, `duck_expr` (giảm tiếng gốc), `alimiter`; `CutawayStyle` lấy từ `configs/` |
 | `src/automeme/rendering/renderer.py` | Gọi FFmpeg | Overlay hình/GIF/video và delay + mix SFX; audio gốc chỉ encode lại khi cần lọc/mix |
 | `src/automeme/workspace.py` | Đường dẫn + khóa cache | `video_fingerprint` (kích thước + 1 MB đầu/cuối), `asr_key`, `slug`, `paths_for` |
 | `src/automeme/transcription/base.py` | Interface `Transcriber` | `transcribe(audio) -> dict thô`, `unload()` trả VRAM |
@@ -89,7 +89,8 @@ Schema analysis: `{version, video, backend, model, opportunities[MemeOpportunity
 anchor/delay do LLM đề xuất.
 
 Schema timeline (SPEC §34): `{version, video, events[{id, type:"meme", start, duration, asset,
-mode:"overlay", position?, scale?, status, confidence?, query?, reason?}]}`. `status` là
+mode:"overlay"|"cutaway", position?, scale?, status, confidence?, query?, reason?}]}`; thêm
+`{type:"sfx", asset, volume}` và `{type:"zoom", factor}` (không có asset). `status` là
 `pending|accepted|rejected`; renderer bỏ qua rejected. Bỏ trống `position`/`scale`
 thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đường dẫn `asset` tương
 đối được hiểu từ thư mục gốc dự án, rồi thử tiếp từ `assets/`.
@@ -108,7 +109,9 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | `automeme inspect` | Xong | Chạy thật, cảnh báo đúng cooldown và mật độ |
 | `automeme render` (ảnh, GIF, vùng trong suốt) | Xong | Chạy thật; trích khung hình kiểm tra meme hiện đúng lúc, đúng góc; giữ nguyên tiếng gốc |
 | `automeme analyze` (Ollama/Claude) | Xong | Test offline; **2026-09-17 chạy thật với Ollama `qwen3:8b`**: chọn đúng câu punchline, lý do tiếng Việt hợp lý, structured output hợp lệ |
-| **Nghiệm thu livestream tiếng Việt thật** | Chạy được, chất lượng chưa đạt | 2026-09-17: `automeme run <link> --from 36:00 --to 37:30` trên VOD 2 giờ 28 phút của người dùng → MP4 trong 3 phút 59 giây, không lỗi, giữ tiếng + trộn SFX. Chất lượng: xem mục "Chưa làm được" |
+| **Nghiệm thu livestream tiếng Việt thật** | Chạy được; mật độ và timing đã sửa | 2026-09-17: `automeme run <link> --from 36:00 --to 37:30` trên VOD 2 giờ 28 phút của người dùng → MP4 trong 3 phút 59 giây. 2026-09-19 chạy lại với `--profile pro`: 7 meme + 4 SFX → 4 meme (2 cú cắt tràn màn hình + zoom) + 2 SFX khác nhau; meme sớm hơn ~6 s nhờ tách câu; đỉnh âm 0,0 → −0,8 dB. Chọn câu đùa vẫn phụ thuộc qwen3:8b |
+| Meme tràn màn hình + zoom + SFX khi cắt (profile `pro`) | Xong | Test render thật (PSNR khung tràn màn hình), trích 8 khung trên livestream; đo âm lượng: tiếng gốc −9 dB lúc cắt, SFX cắt đỉnh −9,5 dB |
+| Web: người duyệt tự quyết meme | Xong | Test service + HTTP thật (gợi ý, xem trước asset, đổi chế độ, thêm meme, zoom); Chrome headless chụp editor với dự án thật |
 | Tải video YouTube (CLI + Studio) | Xong | 2026-09-17 tải thật Big Buck Bunny (CC-BY): đoạn 0:30–1:00 qua CLI hết 29 s, đoạn 1:00–1:20 qua API Studio hết 17 s; H.264 1920×1080 60fps + AAC, thời lượng đúng; 70 test không cần mạng |
 | Nghiệm thu `automeme run` với model thật | Xong (trừ tiếng Việt) | 2026-09-17: Whisper large-v3 + qwen3:8b + kho 130 meme thật → MP4 trong 1 phút 51 giây; kiểm tra khung hình meme hiện đúng lúc, đúng góc |
 | Thư viện local + Meme Search API v1 | Xong | Test metadata hỏng từng dòng, safe filter, tìm local, request vector, token, cache và các chặn bảo mật |
@@ -133,12 +136,10 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
 | Tải video cần đăng nhập (riêng tư, giới hạn tuổi, hội viên) | Chưa hỗ trợ cookie — báo lỗi rõ |
-| **Quá nhiều meme trên livestream** | Nghiệm thu: 7 meme + 4 SFX trong 90 s. qwen3:8b cho confidence 0,85 gần như mọi đoạn (7/10), lý do chung chung → chạm trần `floor(1,5 × 5)`. Cần: prompt đòi chấm điểm phân biệt + chỉ giữ top theo điểm, hoặc profile riêng cho stream |
-| **Đoạn transcript quá dài → meme lệch câu đùa** | Whisper trả 10 đoạn 6–17 s không dấu câu; meme neo ở cuối đoạn nên có thể trễ >10 s so với câu đùa. Cần tách đoạn theo khoảng lặng dùng timestamp theo từ (đã có `words`) trước khi dựng context |
-| **Meme mẫu còn trống chữ** | Template Imgflip (Batman tát Robin, Gru's plan…) để trống bong bóng thoại nên chèn vào vô nghĩa. Cần đánh dấu template cần chữ và không tự chọn |
-| **SFX lặp lại** | 4 lần cùng một âm "punch heavy" trong 90 s — SFX chưa có phạt trùng như meme |
+| **qwen3:8b chấm điểm không phân biệt** | Đã thêm thang điểm vào prompt: số meme giữ lại giảm từ 7/10 xuống 4/26 câu, nhưng cả 4 vẫn đúng 0,85 → thứ tự cú cắt dựa vào luật phụ (có SFX, sớm hơn). Có thể thử model lớn hơn hoặc Claude |
+| **Một số template vẫn có vùng chữ trống** | Đã loại 12 nhãn phong cách cần chữ (profile `pro`), nhưng ảnh như Monkey Puppet vẫn có dải trắng phía trên. Cần gắn nhãn thủ công trong kho hoặc cắt dải trắng |
 | Nhận dạng từ mượn tiếng Anh / từ lóng | "live được hai nền tảng" → "lấy lại được hai nền tảng"; "đổi gió" → "đổi giống như". Có thể thử `initial_prompt` (từ vựng stream + dấu câu) |
-| Mode `cutaway`, sự kiện `sfx`/`zoom`/caption | SPEC §36, §71–73 — để sau MVP |
+| Caption, zoom độc lập (không đi kèm cú cắt) | SPEC §71–73 — `cutaway`, `sfx`, `zoom` đã có; caption và zoom theo nhịp gameplay chưa làm |
 | File `LICENSE` | Người dùng chưa chọn MIT hay Apache-2.0; repo đang public nên cần sớm |
 
 ### Cấu hình
@@ -149,7 +150,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **380 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **425 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -235,6 +236,26 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
     public. Analysis key phụ thuộc video/transcript/prompt/LLM/bộ lọc; timeline key phụ thuộc
     analysis/provider/thư viện/ranking; render key phụ thuộc video/timeline/assets/codec. Timeline
     hoặc output bị sửa ngoài automeme được giữ lại, chỉ `--force` mới ghi đè.
+
+**2026-09-19 — dựng kiểu chuyên nghiệp** (người dùng: "hãy tự quyết định, hoặc hoàn thành bản
+web để tự quyết định meme"):
+
+- Meme tràn màn hình (`mode: cutaway`): video gốc **vẫn chạy bên dưới** (không đổi thời lượng),
+  tiếng gốc giảm còn 35% rồi trở lại, meme chiếm 92% khung trên nền mờ tối của chính nó, phóng
+  1,06 → 1 trong 0,15 s, mờ dần vào/ra. Cả bài qua `alimiter` −1 dB.
+- Zoom 1,1× vào gameplay trong 0,3 s ngay trước mỗi cú cắt; mỗi cú cắt có một SFX riêng
+  (`cutaway.sfx_volume` 0,6, to hơn SFX thường) — không tính vào mật độ SFX thường.
+- Cú cắt do **code** chọn: `cutaway.mode: auto`, confidence ≥ 0,8, tối đa 2/phút, cách nhau
+  ≥ 15 s (đầu → đầu), **không quá 50% số meme** (`max_share`). Bằng điểm thì ưu tiên khoảnh
+  khắc AI cũng đề xuất SFX, rồi đến khoảnh khắc sớm hơn. Mặc định `mode: never`; profile mới
+  `pro` bật `auto`, các profile khác giữ nguyên.
+- Meme trùng giờ với cú cắt tràn màn hình là **lỗi** (renderer vẽ theo thứ tự sự kiện nên meme
+  góc sẽ đè lên cú cắt). Đổi quyết định trong commit `ff44c38` ("meme góc lúc cắt vẫn được").
+- Tách đoạn Whisper dài hơn 4 s tại khoảng lặng ≥ 0,3 s giữa các từ (im lặng ≥ 1 s luôn là ranh
+  giới) trước khi dựng context; transcript trên đĩa giữ nguyên. Prompt có thang điểm confidence.
+- Web: người duyệt đổi chế độ, chọn meme gợi ý (xếp theo truy vấn AI, bù phần còn lại của thư
+  viện; tự gõ từ khóa thì chỉ kết quả khớp), chèn meme mới tại playhead (được chấp nhận sẵn,
+  validator vẫn chặn chồng lấn). Chỉ chọn được asset trong `assets/memes` và `assets/gifs`.
 
 **2026-09-17 — tải video YouTube** (người dùng đồng ý cả 5 điểm):
 
@@ -387,9 +408,10 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
 
 ### Tiếp theo
 
-Đã nghiệm thu với Ollama + kho meme thật (2026-09-17). Còn: nghiệm thu bằng video tiếng Việt;
-cải thiện chọn meme khi không có Meme Search (tìm kiếm chữ không hiểu đồng nghĩa); kiểm tra thêm
-media meme dạng video. Sau đó mới mở rộng cutaway/SFX/caption hoặc scene understanding nếu cần.
+Đã nghiệm thu với Ollama + kho meme thật (2026-09-17) và dựng kiểu `pro` trên livestream
+(2026-09-19). Còn: chọn câu đùa tốt hơn (qwen3:8b chấm điểm đồng đều — thử model lớn hơn/Claude);
+cải thiện chọn meme khi không có Meme Search (tìm kiếm chữ không hiểu đồng nghĩa); caption và
+zoom theo nhịp gameplay; kiểm tra thêm media meme dạng video.
 Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke → `CaptionEvent`),
 `layout.py` (khung dọc 9:16), `claude_api.py`.
 
@@ -459,6 +481,9 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] Cài catalog 30 SFX Kenney CC0, AI chọn theo query, cooldown/mật độ/volume và FFmpeg mix
 - [x] Vendor OSS offline + third-party notices
 - [x] Tải video YouTube bằng yt-dlp: CLI `download`, `run <link>`, ô dán link trong Studio
+- [x] Meme tràn màn hình + zoom trước cú cắt + SFX khi cắt + giảm tiếng gốc + limiter (profile `pro`)
+- [x] Tách đoạn Whisper dài theo khoảng lặng; thang điểm confidence trong prompt
+- [x] Web: đổi góc/tràn màn hình, gợi ý meme thay thế có tìm kiếm, chèn meme tại playhead, chỉnh zoom
 
 ---
 
@@ -478,6 +503,68 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-19 (phiên 15) — Dựng kiểu chuyên nghiệp + người duyệt tự quyết meme (Claude Code)
+
+**Yêu cầu.** "Chỉnh lại edit kèm sound effect, chèn meme và GIF tràn màn hình, trông chuyên
+nghiệp nhất có thể" → "tự quyết định, hoặc hoàn thành bản web để tự quyết định meme". Quyết định
+đã chốt ở mục 4 (2026-09-19).
+
+**Đã làm (4 giai đoạn, commit `ff44c38` cho giai đoạn 1–2):**
+1. Render: cú cắt tràn màn hình, zoom trước cú cắt, giảm tiếng gốc, limiter; FPS meme theo video.
+2. Quyết định dựng: `pick_cutaways`, ưu tiên GIF cho cú cắt, SFX kèm cú cắt và chống lặp file,
+   loại template cần chữ, luân phiên góc; profile `pro`.
+3. Bám câu đùa: `split_long_segments` + thang điểm confidence trong prompt.
+4. Web: API gợi ý/xem trước asset/thêm meme; Studio có công tắc chế độ, lưới gợi ý có tìm kiếm,
+   chèn meme tại playhead, chỉnh zoom, xem trước tràn màn hình (backdrop blur) và zoom, meme góc
+   bị giới hạn chiều cao như render; `automeme review` hỗ trợ chế độ + zoom.
+
+**Nghiệm thu trên livestream (đoạn 36:00–37:30, `--profile pro`).**
+
+| | Trước (`funny`, 17/9) | Sau (`pro`) |
+|---|---|---|
+| Meme / SFX | 7 / 4 (cùng một âm "punch") | 4 (2 tràn màn hình + 2 góc) / 2 âm khác nhau |
+| Câu gửi LLM | 11 đoạn 6–17 s | 28 câu ngắn; giữ 4/26 |
+| Meme đầu tiên | 12,8 s | 6,6 s (sau câu nói ở 6,46 s) |
+| Đỉnh âm cả bài | 0,0 dB | −0,8 dB |
+
+Trích 8 khung: zoom thấy rõ, cú cắt tràn màn hình nền mờ, meme góc luân phiên không che facecam.
+Đo âm: tiếng gốc −9 dB trong cú cắt; SFX cắt ban đầu chỉ đỉnh −14 dB → thêm `cutaway.sfx_volume`
+(0,6), giờ −9,5 dB. Bản cũ giữ ở `data/output/..._truoc-pro.mp4` để so.
+
+**Lỗi tìm ra khi chạy thật, đã sửa kèm test tái hiện:**
+- `split_long_segments`: `pieces[-2] += pieces.pop()` lỗi IndexError khi mẩu cuối quá ngắn;
+  im lặng 6 s bị gộp vì mẩu trước chưa đủ 3 từ → im lặng ≥ 1 s luôn là ranh giới.
+- qwen3 trả `timing.duration=0` khi `insert_meme=false` → cả câu bị loại hai lần (2/28 câu).
+- 3/4 meme thành cú cắt vì điểm bằng nhau → thêm `cutaway.max_share` + ưu tiên có SFX.
+- Cú cắt thứ hai mất SFX (file khớp nhất vừa dùng) → thử thêm `cutaway.sfx_query`.
+- Gợi ý web chỉ 2–3 meme vì truy vấn AI khớp ít → bù phần còn lại của thư viện.
+- Web: ảnh xem trước trong bảng sự kiện bị cắt (lỗi cũ); meme góc khổ dọc ở bản xem trước cao
+  gần hết khung trong khi render giới hạn 45% → state trả `display` từ cấu hình.
+
+405 → **425 test**, ruff sạch.
+
+**Còn lại:** qwen3:8b vẫn cho 0,85 cho mọi đề xuất (xem mục 2 "Chưa làm được"); Monkey Puppet
+có dải trắng phía trên; caption chưa làm.
+
+### 2026-09-17 (phiên 14) — Phân tích phong cách HK15 và dựng bản demo thủ công (Codex)
+
+**Tham chiếu.** Phân tích hai đoạn mở đầu 90 giây từ kênh HK15:
+`NUdAnKxsIQo` và `Tp4YsPEWZ8Y`. Sau màn cảnh báo khoảng 15 giây, ngưỡng scene-change 0,22 cho
+thấy nhịp đổi hình trung bình 2,44 giây và 2,17 giây. Phần lớn nhịp đến từ gameplay, crop/zoom,
+caption và facecam; reaction lớn/cutaway chỉ dùng tại punchline, thường dưới khoảng 1–1,5 giây.
+
+**Triển khai.** Dùng video tiếng Việt 90 giây đã có trong workspace, tạo timeline thủ công
+`data/timelines/bach-stream-dung-choi-tro-nay-tao-cu-gspiiw_g1bu-2160s-2250s.hk15.timeline.json`:
+7 GIF ngắn 0,9–1,15 giây, 3 SFX khác nhau, timing bám timestamp theo từ thay vì cuối đoạn Whisper,
+đổi giữa top-right/bottom-right/center để không che facecam góc dưới trái. Không dùng template
+trống chữ và không dùng reaction chính trị.
+
+**Kết quả.** Render ra
+`data/output/bach-stream-dung-choi-tro-nay-tao-cu-gspiiw_g1bu-2160s-2250s_hk15-style.mp4`:
+H.264/AAC, 1920×1080, đúng 90,000 giây. Đã trích khung tại cả 7 event để kiểm tra overlay; audio
+giữ mean −21,5 dB, peak từ 0,0 dB nguồn thành −0,1 dB, không tăng clipping. Đây là bản dựng mẫu
+đã duyệt thủ công; chưa thêm profile tự động hay tính năng caption/zoom/cutaway vào code.
 
 ### 2026-09-17 (phiên 13) — Nghiệm thu trên livestream tiếng Việt thật (Claude Code)
 

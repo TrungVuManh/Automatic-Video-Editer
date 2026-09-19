@@ -103,3 +103,35 @@ h1,h2,h3,p { margin-top: 0; }.hero h1 { margin: 16px 0 14px; font-size: clamp(36
 .youtube-note{display:flex;gap:7px;align-items:flex-start;margin-top:10px;color:var(--muted);font-size:9px;line-height:1.5}
 .youtube-note svg{width:13px;flex:none;color:var(--amber)}
 @media(max-width:620px){.youtube-row{grid-template-columns:1fr 1fr}.youtube-row .button{grid-column:1/-1}}
+
+/* Biên tập: meme tràn màn hình, zoom, gợi ý meme thay thế, chèn meme */
+.video-stage #meme-overlay-video{display:none;position:absolute;pointer-events:none;z-index:4;object-fit:contain;max-height:none}
+.video-stage #meme-overlay.cutaway,.video-stage #meme-overlay-video.cutaway{inset:0;width:100%;height:100%;padding:4%;background:rgba(5,6,8,.42);-webkit-backdrop-filter:blur(18px) brightness(.8);backdrop-filter:blur(18px) brightness(.8)}
+.video-stage video#player{transition:transform .12s ease-out;transform-origin:center}
+.waveform-actions{display:flex;align-items:center;gap:14px}.waveform-actions .text-button{font-size:10px;font-weight:700}
+.chip-icon{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:7px;background:#080a0d;color:var(--accent-2)}.chip-icon svg{width:18px}.chip-icon.zoom{color:var(--mint)}.chip-icon.sfx{color:var(--amber)}
+.event-chip.cutaway{border-color:rgba(251,113,133,.32)}.event-chip.cutaway.active,.event-chip.cutaway:hover{border-color:var(--danger)}
+#event-inspector{max-height:calc(100vh - 190px);overflow:auto}
+.event-preview.cutaway{background:#000;box-shadow:inset 0 0 0 1px rgba(251,113,133,.3)}
+.event-reason{margin:-6px 0 14px;font-size:9px;line-height:1.5;color:var(--muted)}.event-reason b{color:var(--accent-2)}
+.mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:13px;padding:4px;background:#0c1016;border:1px solid var(--line);border-radius:11px}
+.mode-switch button{display:flex;align-items:center;justify-content:center;gap:6px;height:34px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:10px;font-weight:700;cursor:pointer}
+.mode-switch button svg{width:14px}.mode-switch button:hover{color:var(--text)}
+.mode-switch button.active{background:rgba(139,92,246,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(139,92,246,.35)}
+.mode-switch button[data-mode="cutaway"].active{background:rgba(251,113,133,.14);box-shadow:inset 0 0 0 1px rgba(251,113,133,.35)}
+.range-value{float:right;color:var(--accent-2)}
+.zoom-preview{display:grid;place-content:center;text-align:center;gap:8px;color:var(--mint)}.zoom-preview svg{width:30px;margin:auto}.zoom-preview p{margin:0;padding:0 16px;font-size:10px;line-height:1.5;color:var(--muted)}
+.suggestions{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.suggestions-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}.suggestions-head strong{font-size:11px}.suggestions-head small{font-size:9px;color:var(--muted)}
+.suggestion-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px;min-height:60px}
+.suggestion-card{position:relative;display:grid;gap:4px;padding:4px;border:1px solid var(--line);border-radius:9px;background:#0c1016;cursor:pointer;text-align:left;min-width:0}
+.suggestion-card:hover{border-color:#4a5466}.suggestion-card.current,.suggestion-card.picked{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.suggestion-card img,.suggestion-card video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:#080a0d}
+.suggestion-card span{font-size:8px;color:#aeb6c4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.suggestion-card b{position:absolute;top:7px;left:7px;padding:2px 5px;border-radius:5px;background:var(--accent);font-size:7px}
+.suggestion-empty{grid-column:1/-1;margin:0;font-size:10px;line-height:1.5;color:var(--muted)}
+.inspector-title{display:flex;align-items:center;gap:8px;margin-bottom:16px}.inspector-title svg{width:16px;color:var(--accent-2)}.inspector-title strong{font-size:13px}
+.button.ghost.wide{height:40px;margin-top:8px}.button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+@media(prefers-reduced-motion:reduce){.video-stage video#player{transition:none}}
+/* Ảnh xem trước trong bảng sự kiện: % chiều cao trong grid không tính được → ảnh cao bị cắt */
+.event-preview img,.event-preview video{max-height:150px}

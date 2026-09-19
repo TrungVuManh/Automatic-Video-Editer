@@ -83,6 +83,7 @@ automeme install-memes                             # cài kho 100 meme có nhãn
 automeme install-gifs                              # cài thêm 30 reaction GIF động
 automeme install-sfx                               # cài 30 sound effect Kenney CC0
 automeme run data\input\video.mp4 --profile funny # chạy trọn pipeline MVP
+automeme run data\input\video.mp4 --profile pro   # kiểu kênh game: cắt tràn màn hình + zoom + SFX
 automeme review data\input\video.mp4               # duyệt trên giao diện web local
 automeme studio                                     # mở giao diện đầy đủ (khuyên dùng)
 ```
@@ -97,7 +98,9 @@ automeme studio --no-browser --port 0
 
 Studio mở trong trình duyệt và gom toàn bộ quy trình vào một nơi: kéo-thả video, chọn profile,
 theo dõi từng bước AI, tiếp tục từ cache, duyệt/chỉnh meme trên waveform, đọc transcript,
-render/tải output và quản lý metadata kho meme. Server chỉ bind `127.0.0.1`, có token phiên và
+render/tải output và quản lý metadata kho meme. Khi AI chọn meme chưa hợp, bạn đổi meme đó sang
+góc/tràn màn hình, chọn meme khác từ lưới gợi ý (có ô tìm kiếm) hoặc tự chèn meme tại vị trí
+đang xem; bản xem trước khớp bản render. Server chỉ bind `127.0.0.1`, có token phiên và
 không cần Internet để tải giao diện.
 
 Frontend tận dụng các dự án mã nguồn mở đã vendoring để chạy offline: Plyr, WaveSurfer.js,
@@ -163,7 +166,8 @@ cờ CLI  >  biến môi trường / .env  >  profile (--profile)  >  configs/de
 ```
 
 - `configs/default.yaml` — đủ mọi khóa, có chú thích.
-- `configs/subtle.yaml`, `funny.yaml`, `chaotic.yaml` — profile, chỉ ghi khóa muốn đổi.
+- `configs/subtle.yaml`, `funny.yaml`, `chaotic.yaml`, `pro.yaml` — profile, chỉ ghi khóa muốn
+  đổi. `pro` bật meme tràn màn hình tự động (xem `docs/GUIDE.md` mục 4.3).
 - `.env` — cấu hình của máy (model Whisper, `cuda`/`cpu`, địa chỉ Ollama…). Tên biến xem
   `.env.example`. Tham số dựng video (`MEME_COOLDOWN`…) để dạng comment: bỏ comment sẽ đè
   **mọi** profile.

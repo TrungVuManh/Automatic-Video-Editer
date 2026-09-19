@@ -126,12 +126,12 @@
           <div class="editor-empty panel" id="editor-empty"><i data-lucide="mouse-pointer-2"></i><h2>Chọn một dự án để biên tập</h2><p>Dự án cần hoàn tất bước tạo timeline trước.</p><button class="button primary" data-go="home">Xem danh sách dự án</button></div>
           <div class="editor-layout hidden" id="editor-layout">
             <div class="preview-column panel">
-              <div class="video-stage"><video id="player" playsinline controls></video><img id="meme-overlay" alt="Meme đang hiển thị"></div>
-              <div class="waveform-wrap"><div class="waveform-head"><span><i data-lucide="audio-waveform"></i>Timeline thông minh</span><span id="playhead-time">00:00.00</span></div><div id="waveform"></div><div id="wave-timeline"></div></div>
+              <div class="video-stage"><video id="player" playsinline controls></video><img id="meme-overlay" alt="Meme đang hiển thị"><video id="meme-overlay-video" muted playsinline loop preload="auto" aria-hidden="true"></video></div>
+              <div class="waveform-wrap"><div class="waveform-head"><span><i data-lucide="audio-waveform"></i>Timeline thông minh</span><span class="waveform-actions"><button class="text-button" id="add-meme-button" title="Chèn meme tại vị trí đang xem"><i data-lucide="plus"></i>Chèn meme tại đây</button><span id="playhead-time">00:00.00</span></span></div><div id="waveform"></div><div id="wave-timeline"></div></div>
               <div class="timeline-list" id="timeline-list"></div>
             </div>
             <aside class="inspector panel">
-              <div class="inspector-tabs"><button class="active" data-tab="event">Meme</button><button data-tab="transcript">Lời thoại</button></div>
+              <div class="inspector-tabs"><button class="active" data-tab="event">Sự kiện</button><button data-tab="transcript">Lời thoại</button></div>
               <div id="event-inspector"><div class="inspector-empty"><i data-lucide="panel-right-open"></i><p>Chọn một meme trên timeline để chỉnh sửa.</p></div></div>
               <div id="transcript-panel" class="hidden"><label class="search-box"><i data-lucide="search"></i><input id="transcript-search" placeholder="Tìm trong lời thoại…"></label><div class="transcript-list" id="transcript-list"></div></div>
             </aside>

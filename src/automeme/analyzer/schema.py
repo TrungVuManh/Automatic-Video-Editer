@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -37,6 +38,19 @@ class MemeOpportunity(_StrictModel):
     timing: MemeTiming
     insert_sfx: bool = False
     sfx_query: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _timing_vo_nghia_khi_khong_chen(cls, data: Any) -> Any:
+        """Không chèn meme thì `timing.duration` không được dùng; qwen3 hay trả 0 cho trường hợp
+        này và cả câu trả lời bị loại hai lần (lỗi thật khi nghiệm thu livestream). Đưa về
+        khoảng hợp lệ thay vì bỏ một quyết định "không chèn" đúng."""
+        if isinstance(data, dict) and data.get("insert_meme") is False:
+            timing = data.get("timing")
+            if isinstance(timing, dict) and isinstance(timing.get("duration"), int | float):
+                data = {**data, "timing": {**timing,
+                                           "duration": min(max(timing["duration"], 0.5), 5.0)}}
+        return data
 
     @model_validator(mode="after")
     def _co_du_thong_tin_khi_de_xuat(self) -> MemeOpportunity:

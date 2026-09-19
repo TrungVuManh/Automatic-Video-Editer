@@ -10,8 +10,9 @@ click/nút bấm, pop/bật lên, glitch/lỗi máy, laser/tia điện. Meme và
 nhưng mặc định hãy tiết chế. Khi không cần âm, đặt `insert_sfx=false` và `sfx_query=""`.
 
 Chỉ đề xuất khi có tín hiệu rõ như punchline, bất ngờ, mỉa mai, ngượng, thất bại, bối rối,
-sốc, khoe khoang, bất đồng, thất vọng hoặc tiết lộ kịch tính. Ưu tiên ít nhưng đúng. Không
-tìm tên một meme cụ thể; `search_query` phải là mô tả reaction ngắn 2–5 từ, dùng được để tìm
+sốc, khoe khoang, bất đồng, thất vọng hoặc tiết lộ kịch tính. Ưu tiên ít nhưng đúng: phần lớn
+câu trong livestream/vlog là trò chuyện bình thường và KHÔNG cần meme. Không tìm tên một meme
+cụ thể; `search_query` phải là mô tả reaction ngắn 2–5 từ, dùng được để tìm
 theo ngữ nghĩa.
 
 Ưu tiên từ khóa thuộc taxonomy song ngữ của kho local khi phù hợp: awkward/ngượng,
@@ -23,6 +24,14 @@ preference/ưa thích, choice/lựa chọn, dilemma/khó chọn, temptation/cám
 suspicion/nghi ngờ, request/yêu cầu. Điền `reaction_type`, `emotion` và `preferred_style`
 nhất quán với mô tả này. Nếu không nên chèn, đặt `insert_meme=false`, confidence phù hợp
 và có thể để các chuỗi ngữ nghĩa rỗng.
+
+Chấm `confidence` có phân biệt, đừng cho mọi câu cùng một điểm:
+- 0.90–1.00: punchline/cú twist rõ nhất, người xem chắc chắn bật cười hoặc sốc.
+- 0.75–0.89: có tín hiệu cảm xúc rõ, meme làm câu nói mạnh hơn.
+- 0.50–0.74: chỉ hơi thú vị → `insert_meme=false`.
+- dưới 0.50: nói chuyện bình thường, giải thích, đọc tên, chào hỏi → `insert_meme=false`.
+Tín hiệu phải nằm trong chính câu CURRENT (câu trước/sau chỉ để hiểu ngữ cảnh); nếu câu đùa
+thật sự ở câu trước hoặc sau thì CURRENT không phải lúc chèn.
 
 Khi khoảnh khắc cần chuyển động để tăng lực biểu cảm (cười lớn, vỗ tay, nhảy ăn mừng,
 nhún vai, gõ phím, nhìn quanh), đặt `preferred_style="animated"` để ưu tiên reaction GIF.

@@ -1,23 +1,28 @@
 """State và thao tác thuần phía sau giao diện review."""
 from __future__ import annotations
 
+import re
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..config import Settings
 from ..media.probe import probe
 from ..memes.local import SUPPORTED
+from ..memes.schema import MemeCandidate
 from ..timeline.schema import (
     SCALE_MAX,
     SCALE_MIN,
+    ZOOM_MAX,
+    ZOOM_MIN,
     MemeEvent,
     SfxEvent,
     Timeline,
     ViTri,
+    ZoomEvent,
     has_asset,
     load_timeline,
     save_timeline,
@@ -40,12 +45,24 @@ class EventPatch(BaseModel):
     position: ViTri | None = None
     scale: float | None = Field(default=None, ge=SCALE_MIN, le=SCALE_MAX)
     volume: float | None = Field(default=None, ge=0, le=1)
+    mode: Literal["overlay", "cutaway"] | None = None
+    factor: float | None = Field(default=None, ge=ZOOM_MIN, le=ZOOM_MAX)
 
     @model_validator(mode="after")
     def _khong_cho_patch_rong(self) -> EventPatch:
         if not self.model_fields_set:
             raise ValueError("không có trường nào để cập nhật")
         return self
+
+
+class AddMemePayload(BaseModel):
+    """Body của yêu cầu thêm meme từ giao diện duyệt."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: float = Field(ge=0)
+    asset: str = Field(min_length=1)
+    mode: Literal["overlay", "cutaway"] = "overlay"
 
 
 def apply_event_patch(timeline: Timeline, event_id: str, patch: EventPatch) -> Timeline:
@@ -56,19 +73,57 @@ def apply_event_patch(timeline: Timeline, event_id: str, patch: EventPatch) -> T
             continue
         changes = patch.model_dump(exclude_unset=True)
         if isinstance(event, SfxEvent):
-            invalid = {"position", "scale"} & changes.keys()
-            if invalid:
-                raise ReviewError("SFX không có vị trí hoặc tỉ lệ hiển thị.")
-            model = SfxEvent
+            if {"position", "scale", "mode", "factor"} & changes.keys():
+                raise ReviewError("SFX chỉ sửa được file, thời gian và âm lượng.")
+            model: type[MemeEvent | SfxEvent | ZoomEvent] = SfxEvent
+        elif isinstance(event, ZoomEvent):
+            if {"asset", "position", "scale", "volume", "mode"} & changes.keys():
+                raise ReviewError("Zoom chỉ sửa được thời gian và độ phóng.")
+            model = ZoomEvent
         else:
-            if "volume" in changes:
-                raise ReviewError("Meme không có âm lượng SFX.")
+            if {"volume", "factor"} & changes.keys():
+                raise ReviewError("Meme không có âm lượng SFX hay độ phóng zoom.")
             model = MemeEvent
         data = event.model_dump()
         data.update(changes)
         result.events[index] = model.model_validate(data)
         return result
     raise ReviewError(f"Không có sự kiện {event_id!r}.")
+
+
+def add_meme_event(timeline: Timeline, *, start: float, duration: float, asset: str,
+                   mode: Literal["overlay", "cutaway"] = "overlay") -> tuple[Timeline, str]:
+    """Thêm meme do người duyệt chọn (đã chấp nhận sẵn); trả timeline mới và id sự kiện mới."""
+    result = timeline.model_copy(deep=True)
+    event_id = new_event_id(result)
+    result.events.append(MemeEvent(
+        id=event_id, start=round(start, 3), duration=round(duration, 3), asset=asset,
+        mode=mode, status="accepted", reason="người duyệt thêm",
+    ))
+    return result, event_id
+
+
+def new_event_id(timeline: Timeline) -> str:
+    """`event_NNN` lớn hơn mọi id dạng số đang có, để không trùng cả với sự kiện đã từ chối."""
+    so = [int(m.group(1)) for e in timeline.events if (m := re.fullmatch(r"event_(\d+)", e.id))]
+    return f"event_{max(so, default=0) + 1:03d}"
+
+
+def rank_suggestions(candidates: Sequence[MemeCandidate], *, exclude_styles: Sequence[str] = (),
+                     animated_first: bool = False, limit: int = 8) -> list[MemeCandidate]:
+    """Xếp hạng meme thay thế cho người duyệt. Hàm thuần.
+
+    Điểm = 0.8 × khớp nghĩa + 0.2 × chất lượng; cú cắt tràn màn hình cộng thêm 0.1 cho GIF/video
+    (cần chuyển động). Bỏ asset không an toàn và style bị loại (`meme.exclude_styles`).
+    """
+    loai = set(exclude_styles)
+
+    def diem(c: MemeCandidate) -> float:
+        dong = 0.1 if animated_first and c.type in ("gif", "video") else 0.0
+        return 0.8 * c.semantic_score + 0.2 * c.quality + dong
+
+    hop_le = [c for c in candidates if c.safe and not loai & set(c.style)]
+    return sorted(hop_le, key=lambda c: (-diem(c), c.id))[:limit]
 
 
 def set_event_status(timeline: Timeline, event_id: str, status: str) -> Timeline:
@@ -118,6 +173,9 @@ class ReviewSession:
                 "assets": self.available_assets(),
                 "sfx_assets": self.available_sfx_assets(),
                 "transcript": transcript,
+                # để bản xem trước trên web khớp bản render (configs/, mục meme)
+                "display": self.settings.meme.model_dump(mode="json", include={
+                    "scale_default", "position_default", "margin_ratio", "max_height_ratio"}),
                 "errors": errors,
                 "warnings": warnings,
             }
@@ -143,6 +201,91 @@ class ReviewSession:
                     )
             timeline = apply_event_patch(load_timeline(self.timeline_path), event_id, patch)
             return self._validate_and_save(timeline)
+
+    def add_meme(self, *, start: float, asset: str,
+                 mode: Literal["overlay", "cutaway"] = "overlay",
+                 duration: float | None = None) -> tuple[Timeline, str]:
+        """Người duyệt tự chèn meme từ thư viện local; ràng buộc cứng vẫn do validator quyết."""
+        with self._lock:
+            if asset not in self.available_assets():
+                raise ReviewError("Meme thêm vào phải nằm trong thư viện meme/GIF local.")
+            if duration is None:
+                cfg = self.settings.cutaway if mode == "cutaway" else self.settings.meme
+                duration = cfg.duration_min
+            if self.video_duration is not None:
+                duration = min(duration, self.video_duration - start)
+            if duration <= 0:
+                raise ReviewError("Điểm chèn nằm ngoài video.")
+            timeline, event_id = add_meme_event(
+                load_timeline(self.timeline_path), start=start, duration=duration,
+                asset=asset, mode=mode,
+            )
+            return self._validate_and_save(timeline), event_id
+
+    def suggestions(self, event_id: str | None, query: str | None = None, limit: int = 8,
+                    mode: Literal["overlay", "cutaway"] | None = None) -> list[dict[str, Any]]:
+        """Meme local thay thế cho một sự kiện meme, xếp hạng theo truy vấn của sự kiện
+        (hoặc `query` người duyệt gõ). `event_id=None`: tìm meme để chèn mới. Chỉ trả asset
+        nằm trong thư viện được phép chọn."""
+        from ..memes.base import MemeProviderError
+        from ..memes.local import LocalMemeProvider
+
+        with self._lock:
+            event = None
+            if event_id is not None:
+                timeline = load_timeline(self.timeline_path)
+                event = next((item for item in timeline.events if item.id == event_id), None)
+                if not isinstance(event, MemeEvent):
+                    raise ReviewError(f"{event_id} không phải meme — không có gợi ý thay thế.")
+            provider = LocalMemeProvider(
+                library_file=self.settings.meme.library_file,
+                asset_dirs=[self.settings.paths.assets_dir / "memes",
+                            self.settings.paths.assets_dir / "gifs"],
+                project_root=self.settings.paths.assets_dir.parent,
+            )
+            text = (query or "").strip() or (event and (event.query or event.reason)) or ""
+            candidates = provider.search(text, limit * 4) if text else []
+            if not (query or "").strip():
+                # Truy vấn của AI thường chỉ khớp vài meme: bù phần còn lại của thư viện (điểm
+                # khớp 0 nên luôn đứng sau) để người duyệt luôn có đủ lựa chọn. Người duyệt tự gõ
+                # từ khóa thì chỉ hiện kết quả khớp.
+                seen = {c.id for c in candidates}
+                candidates = candidates + [c for c in provider._load()
+                                           if c.safe and c.id not in seen]
+            ranked = rank_suggestions(
+                candidates, exclude_styles=self.settings.meme.exclude_styles,
+                animated_first=(mode or (event and event.mode)) == "cutaway",
+                limit=limit * 2,
+            )
+            allowed = set(self.available_assets())
+            root = self.settings.paths.assets_dir.parent.resolve()
+            rows: list[dict[str, Any]] = []
+            for candidate in ranked:
+                try:
+                    asset = provider.materialize(candidate).relative_to(root).as_posix()
+                except (MemeProviderError, ValueError):
+                    continue
+                if asset not in allowed:
+                    continue
+                rows.append({
+                    "asset": asset,
+                    "id": candidate.id,
+                    "type": candidate.type,
+                    "description": candidate.description,
+                    "tags": candidate.tags[:4],
+                    "score": round(candidate.semantic_score, 3),
+                    "current": event is not None and asset == event.asset,
+                })
+                if len(rows) >= limit:
+                    break
+            return rows
+
+    def asset_file(self, asset: str) -> Path:
+        """File của một asset trong thư viện được phép (xem trước gợi ý); chặn đường dẫn lạ."""
+        if asset not in self.available_assets() and asset not in self.available_sfx_assets():
+            raise ReviewError("Asset không nằm trong thư viện local.")
+        return resolve_asset(asset, self.settings.paths.assets_dir.parent,
+                             self.settings.paths.assets_dir)
 
     def set_status(self, event_id: str, status: str) -> Timeline:
         with self._lock:

@@ -193,3 +193,130 @@ def test_review_server_tu_choi_bind_ra_mang(review_project):
         from automeme.review.server import ReviewHTTPServer
 
         ReviewHTTPServer(("0.0.0.0", 0), review_project)
+
+
+# ------------------------------------------------ chế độ tràn màn hình, zoom, gợi ý, thêm meme
+def test_patch_doi_meme_sang_tran_man_hinh_va_chan_truong_sai_loai():
+    from automeme.timeline.schema import SfxEvent, ZoomEvent
+
+    timeline = Timeline(video="a.mp4", events=[
+        MemeEvent(id="e1", start=1, duration=1, asset="a.png"),
+        SfxEvent(id="e2", start=1, duration=0.5, asset="s.ogg"),
+        ZoomEvent(id="e3", start=0.7, duration=0.4),
+    ])
+    assert apply_event_patch(timeline, "e1", EventPatch(mode="cutaway")).events[0].mode == (
+        "cutaway")
+    zoom = apply_event_patch(timeline, "e3", EventPatch(factor=1.2, start=0.5)).events[2]
+    assert isinstance(zoom, ZoomEvent) and zoom.factor == 1.2 and zoom.start == 0.5
+    with pytest.raises(ReviewError, match="Zoom chỉ sửa"):
+        apply_event_patch(timeline, "e3", EventPatch(asset="a.png"))
+    with pytest.raises(ReviewError, match="SFX chỉ sửa"):
+        apply_event_patch(timeline, "e2", EventPatch(mode="cutaway"))
+    with pytest.raises(ReviewError, match="Meme không có"):
+        apply_event_patch(timeline, "e1", EventPatch(factor=1.2))
+
+
+def test_rank_suggestions_bo_style_cam_va_uu_tien_gif_khi_tran_man_hinh():
+    from automeme.memes.schema import MemeCandidate
+    from automeme.review.service import rank_suggestions
+
+    anh = MemeCandidate(id="anh", filename="a.png", type="image", semantic_score=0.8)
+    gif = MemeCandidate(id="gif", filename="b.gif", type="gif", semantic_score=0.75)
+    chu = MemeCandidate(id="chu", filename="c.png", type="image", semantic_score=0.9,
+                        style=["comparison"])
+    ban = MemeCandidate(id="ban", filename="d.png", type="image", semantic_score=1, safe=False)
+    tat_ca = [anh, gif, chu, ban]
+    assert [c.id for c in rank_suggestions(tat_ca, exclude_styles=["comparison"])] == [
+        "anh", "gif"]
+    assert [c.id for c in rank_suggestions(tat_ca, exclude_styles=["comparison"],
+                                           animated_first=True)] == ["gif", "anh"]
+    assert len(rank_suggestions(tat_ca, limit=1)) == 1
+
+
+def test_goi_y_meme_thay_the_theo_truy_van(review_project):
+    session = review_project
+    library = session.settings.meme.library_file
+    library.write_text(
+        '{"id": "soc", "filename": "assets/memes/b.gif", "type": "gif", '
+        '"description": "surprised shocked reaction", "tags": ["surprised"]}\n',
+        encoding="utf-8",
+    )
+    rows = session.suggestions("event_001")
+    assert rows[0]["asset"] == "assets/memes/b.gif" and rows[0]["type"] == "gif"
+    assert rows[0]["current"] is False
+    assert session.suggestions("event_001", query="không khớp gì cả xyz") == []
+    assert session.asset_file("assets/memes/b.gif").name == "b.gif"
+    with pytest.raises(ReviewError, match="không nằm trong thư viện"):
+        session.asset_file("../secret.txt")
+
+
+def test_goi_y_khi_su_kien_khong_co_truy_van_dung_ca_thu_vien(review_project):
+    session = review_project
+    timeline = load_timeline(session.timeline_path)
+    timeline.events[0].query = None
+    timeline.events[0].reason = None
+    save_timeline(session.timeline_path, timeline)
+    assets = {row["asset"] for row in session.suggestions("event_001")}
+    assert assets == {"assets/memes/a.png", "assets/memes/b.gif"}
+
+
+def test_them_meme_tu_chon_va_rang_buoc_van_do_code_quyet(review_project):
+    session = review_project
+    _, event_id = session.add_meme(start=6, asset="assets/memes/b.gif", mode="cutaway")
+    event = next(e for e in load_timeline(session.timeline_path).events if e.id == event_id)
+    assert event_id == "event_002" and event.mode == "cutaway" and event.status == "accepted"
+    assert event.duration == session.settings.cutaway.duration_min
+    with pytest.raises(ReviewError, match="thư viện meme"):
+        session.add_meme(start=3, asset="C:/secret.png")
+    with pytest.raises(ReviewError, match="Timeline chưa thể lưu"):
+        session.add_meme(start=6.2, asset="assets/memes/a.png")  # chồng lên meme vừa thêm
+
+
+def test_id_moi_khong_trung_ca_su_kien_da_tu_choi():
+    from automeme.review.service import new_event_id
+
+    timeline = Timeline(video="a.mp4", events=[
+        MemeEvent(id="event_007", start=1, duration=1, asset="a.png", status="rejected"),
+        MemeEvent(id="tu-dat", start=3, duration=1, asset="a.png"),
+    ])
+    assert new_event_id(timeline) == "event_008"
+
+
+def test_goi_y_de_chen_meme_moi_khong_can_su_kien(review_project):
+    session = review_project
+    session.settings.meme.library_file.write_text(
+        '{"id": "vui", "filename": "assets/memes/a.png", "type": "image", '
+        '"description": "happy laugh", "quality": 0.9}\n'
+        '{"id": "cuoi", "filename": "assets/memes/b.gif", "type": "gif", '
+        '"description": "happy laugh"}\n', encoding="utf-8")
+    assert [r["id"] for r in session.suggestions(None, query="happy")] == ["vui", "cuoi"]
+    ranked = session.suggestions(None, query="happy", mode="cutaway")
+    assert [r["id"] for r in ranked] == ["cuoi", "vui"]  # tràn màn hình: ưu tiên GIF
+    assert not any(r["current"] for r in ranked)
+
+
+def test_static_review_ui_ho_tro_zoom_va_tran_man_hinh():
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'class="mode"' in html and 'class="factor"' in html
+    assert "event.type === 'zoom'" in js and "body.factor" in js and "body.mode" in js
+
+
+def test_goi_y_bu_them_thu_vien_khi_truy_van_ai_khop_it(review_project):
+    session = review_project
+    session.settings.meme.library_file.write_text(
+        '{"id": "soc", "filename": "assets/memes/b.gif", "type": "gif", '
+        '"description": "surprised shocked reaction"}\n', encoding="utf-8")
+    rows = session.suggestions("event_001")  # query "surprised reaction" chỉ khớp b.gif
+    assert [r["asset"] for r in rows] == ["assets/memes/b.gif", "assets/memes/a.png"]
+    assert [r["asset"] for r in session.suggestions("event_001", query="surprised")] == [
+        "assets/memes/b.gif"]  # người duyệt tự gõ: chỉ kết quả khớp
+
+
+def test_state_co_thong_so_hien_thi_cho_ban_xem_truoc(review_project):
+    display = review_project.state()["display"]
+    meme = review_project.settings.meme
+    assert display == {"scale_default": meme.scale_default,
+                       "position_default": meme.position_default,
+                       "margin_ratio": meme.margin_ratio,
+                       "max_height_ratio": meme.max_height_ratio}

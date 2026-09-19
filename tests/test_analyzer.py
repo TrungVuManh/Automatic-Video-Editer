@@ -194,3 +194,83 @@ def test_timing_lam_tron_khong_de_sai_so_float():
     cfg = FilterSettings(0, 0, 5, 0.8, 2.5, 0.15)
     found = filter_opportunities([opportunity(duration=1.5)], [context], cfg, video_duration=11.68)
     assert found[0].timing.duration == 1.13
+
+
+# ------------------------------------------------------------------ tách đoạn dài theo khoảng lặng
+def _tu(text, start, dur=0.3):
+    return {"w": text, "start": round(start, 2), "end": round(start + dur, 2)}
+
+
+def test_tach_doan_dai_tai_khoang_lang():
+    """Lỗi thật khi nghiệm thu livestream: đoạn 17 s không dấu câu → meme trễ >10 s."""
+    from automeme.analyzer.context import split_long_segments
+
+    words = [_tu(w, 10 + i * 0.35) for i, w in enumerate("ai giữ tiền trong nhà".split())]
+    words += [_tu(w, 13 + i * 0.35) for i, w in enumerate("tôi giữ chứ ai".split())]  # lặng ~1 s
+    words += [_tu(w, 16 + i * 0.35) for i, w in enumerate("à vợ tôi giữ hộ".split())]
+    goc = {"segments": [{"id": 0, "start": 0.0, "end": 5.0, "text": "câu ngắn giữ nguyên"},
+                        {"id": 1, "start": 10.0, "end": 17.8, "text": "cả khối dài"}],
+           "words": words}
+    tach = split_long_segments(goc, max_seconds=4.0, min_pause=0.3)
+    assert [s["text"] for s in tach["segments"]] == [
+        "câu ngắn giữ nguyên", "ai giữ tiền trong nhà", "tôi giữ chứ ai", "à vợ tôi giữ hộ"]
+    assert [s["id"] for s in tach["segments"]] == [0, 1, 2, 3]
+    assert tach["segments"][3]["end"] == pytest.approx(17.7)  # neo meme ngay sau câu đùa
+    assert len(goc["segments"]) == 2  # không sửa transcript đầu vào
+
+
+def test_loi_noi_lien_tuc_khong_khoang_lang_van_chia_duoi_nguong():
+    from automeme.analyzer.context import split_long_segments
+
+    words = [_tu(f"w{i}", i * 0.3, 0.3) for i in range(40)]  # 12 s nói liền, không nghỉ
+    tach = split_long_segments({"segments": [{"id": 0, "start": 0, "end": 12, "text": "x"}],
+                                "words": words}, max_seconds=4.0, min_pause=0.3)
+    doan = tach["segments"]
+    assert all(s["end"] - s["start"] <= 4.0 for s in doan) and len(doan) >= 3
+    assert " ".join(s["text"] for s in doan) == " ".join(f"w{i}" for i in range(40))
+
+
+def test_doan_dai_khong_co_timestamp_tu_thi_giu_nguyen():
+    from automeme.analyzer.context import split_long_segments
+
+    goc = {"segments": [{"id": 0, "start": 0, "end": 15, "text": "dài"}], "words": []}
+    assert split_long_segments(goc, max_seconds=4, min_pause=0.3)["segments"] == goc["segments"]
+
+
+def test_mau_cuoi_qua_ngan_gop_vao_mau_truoc():
+    """Lỗi thật trên transcript livestream: khoảng lặng ngay trước 1–2 từ cuối làm IndexError."""
+    from automeme.analyzer.context import split_long_segments
+
+    words = [_tu(w, 0 + i * 0.35) for i, w in enumerate("một hai ba bốn năm sáu bảy".split())]
+    words += [_tu("tám", 2.9)]  # lặng 0.5 s rồi chỉ còn một từ
+    tach = split_long_segments({"segments": [{"id": 0, "start": 0, "end": 4.5, "text": "x"}],
+                                "words": words}, max_seconds=2.0, min_pause=0.3)
+    assert tach["segments"][-1]["text"].endswith("tám")
+    assert all(len(s["text"].split()) >= 3 for s in tach["segments"])
+
+
+def test_im_lang_dai_luon_la_ranh_gioi_du_cau_truoc_ngan():
+    """Transcript thật: "này không" … 6 s im lặng … "tắt điện đây" bị gộp thành một câu 7.8 s."""
+    from automeme.analyzer.context import split_long_segments
+
+    words = [_tu("này", 16.66, 0.2), _tu("không", 16.88, 0.9),
+             _tu("tắt", 24.07, 0.4), _tu("điện", 24.47, 0.3), _tu("đây", 24.83, 0.6)]
+    tach = split_long_segments({"segments": [{"id": 0, "start": 16.66, "end": 25.5,
+                                              "text": "x"}], "words": words},
+                               max_seconds=4.0, min_pause=0.3, min_words=2)
+    assert [s["text"] for s in tach["segments"]] == ["này không", "tắt điện đây"]
+    assert tach["segments"][0]["end"] == pytest.approx(17.78)
+
+
+def test_khong_chen_meme_ma_duration_0_van_hop_le():
+    """qwen3 trả timing.duration=0 khi insert_meme=false → trước đây bị loại hai lần."""
+    from automeme.analyzer.schema import MemeOpportunity
+
+    base = {"segment_id": 2, "confidence": 0.3, "trigger": "", "reason": "", "emotion": "",
+            "reaction_type": "", "search_query": "", "preferred_style": "",
+            "timing": {"anchor": 5, "delay": 0.1, "duration": 0}}
+    assert MemeOpportunity.model_validate({**base, "insert_meme": False}).timing.duration == 0.5
+    with pytest.raises(ValueError):
+        MemeOpportunity.model_validate({**base, "insert_meme": True, "trigger": "x",
+                                        "reason": "x", "emotion": "x", "reaction_type": "x",
+                                        "search_query": "x"})

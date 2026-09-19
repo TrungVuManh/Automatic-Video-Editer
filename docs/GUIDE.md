@@ -224,6 +224,7 @@ không đổi được nó nữa.
 | `subtle` | 2 | 12 giây | 0.8 | 0.8–1.5 giây |
 | `funny` | 5 | 6 giây | 0.65 | 0.8–2.5 giây |
 | `chaotic` | 9 | 3 giây | 0.5 | 0.8–2.5 giây |
+| `pro` | 3 | 8 giây | 0.75 | 0.8–1.3 giây, có cắt tràn màn hình |
 
 - **`max_memes_per_minute`** — trần mật độ. Số meme tối đa của cả video là
   `max(1, làm tròn xuống(thời lượng tính bằng phút × giá trị này))`, nên video ngắn vẫn được
@@ -235,6 +236,38 @@ không đổi được nó nữa.
 
 > Ngưỡng, cooldown và mật độ đã được áp dụng khi `analyze`; duration và timing được code kẹp
 > lại trước khi ghi `analysis.json`.
+
+**Profile `pro` — dựng kiểu kênh game chuyên nghiệp** (tham chiếu kênh HK15): ít hiệu ứng
+nhưng trúng punchline, và khoảnh khắc mạnh nhất được **cắt tràn màn hình**:
+
+- Gameplay **zoom 1,1×** trong 0,3 giây ngay trước cú cắt, rồi meme/GIF chiếm cả khung trên nền
+  mờ của chính nó, phóng nhẹ rồi dừng lại (0,15 giây), mờ dần vào/ra.
+- Mỗi cú cắt có một **SFX** (to hơn SFX thường), tiếng gốc **giảm còn 35%** trong lúc cắt rồi
+  trở lại; cả bài qua bộ giới hạn đỉnh −1 dB nên không vỡ tiếng.
+- Cú cắt phải **hiếm**: tối đa 2 mỗi phút, cách nhau ≥ 15 giây, chỉ khoảnh khắc AI chấm
+  ≥ 0,8, và không quá một nửa số meme. Điểm bằng nhau thì ưu tiên khoảnh khắc AI cũng đề xuất
+  SFX. GIF được ưu tiên vì chuyển động đọc được ngay.
+- Meme còn lại ở góc, **luân phiên phải trên / phải dưới** để không che facecam góc trái.
+- Không tự chọn template phải điền chữ mới hiểu (so sánh, hội thoại, lựa chọn…); SFX không lặp
+  cùng file trong 60 giây.
+
+Các khóa nằm ở mục `cutaway` trong `configs/default.yaml` (mặc định `mode: never` — chỉ có cú
+cắt khi bạn tự chọn "Tràn màn hình" trên web):
+
+| Khóa | Mặc định | Ý nghĩa |
+|---|---|---|
+| `mode` | `never` | `auto` = builder tự chọn cú cắt (profile `pro` bật) |
+| `max_per_minute` / `max_share` | 2 / 0.5 | Trần số cú cắt theo thời lượng và theo tỉ lệ số meme |
+| `cooldown` / `min_confidence` | 15 / 0.8 | Khoảng cách giữa hai cú cắt; điểm AI tối thiểu |
+| `duration_min` / `duration_max` | 0.8 / 1.3 | Cú cắt dài bao lâu (giây) |
+| `sfx_on_cut` / `sfx_query` / `sfx_volume` | true / `impact` / 0.6 | SFX kèm cú cắt |
+| `punch_zoom` / `zoom_factor` / `zoom_duration` | true / 1.1 / 0.3 | Zoom trước cú cắt |
+| `inset` / `blur` / `darken` | 0.92 / 24 / −0.18 | Meme chiếm 92% khung; nền mờ và tối đi |
+| `settle_zoom` / `settle_time` / `fade_in` / `fade_out` | 1.06 / 0.15 / 0.06 / 0.08 | Nhịp chuyển động |
+| `duck_volume` / `duck_ramp` / `limiter` | 0.35 / 0.08 / 0.891 | Giảm tiếng gốc; giới hạn đỉnh (0.891 ≈ −1 dB) |
+
+Mục `meme` có thêm `exclude_styles` (nhãn phong cách không được tự chọn) và `position_cycle`
+(danh sách vị trí luân phiên cho meme góc).
 
 **Tạo profile riêng:**
 
@@ -395,9 +428,14 @@ automeme analyze data\input\video.mp4 --force  # bỏ kết quả cũ, gọi LLM
 ```
 
 Lệnh đọc `data/transcripts/<tên-video>.json`; chưa có thì thông báo chạy `transcribe` trước.
-Mỗi câu được gửi cùng hai câu trước và một câu sau. LLM trả `insert_meme`, `insert_sfx`,
-confidence, cảm xúc và các query tìm kiếm. Output sai schema được thử lại một lần; nếu vẫn sai chỉ bỏ
-câu đó. Code tự đặt thời điểm ở cuối câu + 0,15 giây, kẹp duration, rồi áp confidence,
+Lời nói liền mạch (livestream) thường bị Whisper gộp thành đoạn 6–17 giây không dấu câu, khiến
+meme rơi trễ xa câu đùa. Vì vậy đoạn dài hơn `analyzer.max_segment_seconds` (4 giây) được **tách
+thành câu ngắn** tại các khoảng lặng giữa các từ (≥ `analyzer.split_pause`, 0,3 giây; im lặng
+≥ 1 giây luôn là ranh giới). Tắt bằng `analyzer.split_long_segments: false`. File transcript
+không bị sửa. Mỗi câu được gửi cùng hai câu trước và một câu sau. LLM trả `insert_meme`, `insert_sfx`,
+confidence, cảm xúc và các query tìm kiếm; prompt có thang điểm (0,90–1,00 punchline rõ nhất,
+0,75–0,89 tín hiệu rõ, dưới 0,75 là không chèn). Output sai schema được thử lại một lần; nếu vẫn
+sai chỉ bỏ câu đó. Code tự đặt thời điểm ở cuối câu + 0,15 giây, kẹp duration, rồi áp confidence,
 cooldown và số meme/phút theo profile. Kết quả:
 
 ```json
@@ -548,6 +586,21 @@ file này từ `analysis.json` và các thư viện local; bạn vẫn có thể
       "asset": "assets/sfx/popular/ui__error_003.ogg",
       "volume": 0.25,
       "status": "pending"
+    },
+    {
+      "id": "event_003",
+      "type": "zoom",
+      "start": 9.7,
+      "duration": 0.4,
+      "factor": 1.1
+    },
+    {
+      "id": "event_004",
+      "type": "meme",
+      "mode": "cutaway",
+      "start": 10.0,
+      "duration": 1.2,
+      "asset": "assets/gifs/popular/spit-take-surprise-snipe-spit-beer.gif"
     }
   ]
 }
@@ -556,14 +609,15 @@ file này từ `analysis.json` và các thư viện local; bạn vẫn có thể
 | Khóa | Bắt buộc | Ý nghĩa |
 |---|---|---|
 | `id` | có | Mã riêng của sự kiện, không trùng nhau |
-| `type` | không | `meme` (mặc định) hoặc `sfx` |
+| `type` | không | `meme` (mặc định), `sfx` hoặc `zoom` (phóng khung hình gốc, không cần `asset`) |
 | `start` | có | Giây, tính từ đầu video |
 | `duration` | có | Meme hiện bao lâu (giây) |
-| `asset` | có | Đường dẫn ảnh/GIF, tính từ thư mục gốc dự án (hoặc từ `assets/`) |
+| `asset` | có (trừ zoom) | Đường dẫn ảnh/GIF, tính từ thư mục gốc dự án (hoặc từ `assets/`) |
 | `position` | không | `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`. Bỏ trống = `meme.position_default` |
 | `scale` | không | Bề rộng meme so với bề rộng video, 0.05–1.0. Bỏ trống = `meme.scale_default` (0.30). Chiều cao luôn bị giới hạn ở `meme.max_height_ratio` (45% khung) để meme khổ dọc không che nửa màn hình; tỉ lệ ảnh được giữ nguyên |
 | `volume` | không | Chỉ cho SFX, từ 0 đến 1; mặc định 0.25 |
-| `mode` | không | Hiện chỉ có `overlay` (đè lên video) |
+| `mode` | không | Chỉ cho meme: `overlay` (mặc định, ở góc) hoặc `cutaway` (tràn màn hình; bỏ qua `position`/`scale`) |
+| `factor` | không | Chỉ cho zoom: độ phóng 1.01–1.5, mặc định 1.1; zoom dài tối đa 3 giây |
 | `status` | không | `pending`, `accepted`, `rejected`; renderer bỏ qua sự kiện `rejected` |
 | `confidence`, `query`, `reason` | không | Do bước phân tích ghi lại, để bạn hiểu vì sao có meme này |
 
@@ -583,7 +637,8 @@ TIMELINE  smoke-test.mp4  (2 sự kiện bật / 2 tổng, video 00:11.68)
 ```
 
 **Lỗi** (chặn render): thiếu file meme, meme kết thúc sau khi video hết, trùng mã sự kiện, hai
-meme cùng vị trí mà trùng thời gian. **Cảnh báo** (vẫn render): meme dày hơn cooldown, vượt số
+meme cùng vị trí mà trùng thời gian, meme nào trùng thời gian với meme tràn màn hình (cú cắt che
+cả khung), hai zoom trùng thời gian. **Cảnh báo** (vẫn render): meme dày hơn cooldown, vượt số
 meme mỗi phút, thời lượng ngoài khoảng trong cấu hình — timeline viết tay là quyền của bạn.
 
 ### 5.5 Làm toàn bộ bằng AutoMeme Studio
@@ -602,8 +657,18 @@ Trong Studio:
 2. **Tạo video** nhận file kéo-thả **hoặc link YouTube** (dán link, tùy chọn đoạn Từ/Đến, bấm
    **Tải về**; tải xong video tự được chọn), cho chọn profile và theo dõi bốn bước pipeline. Mỗi lần chỉ
    có một job GPU; lỗi ở giữa có thể chạy lại và các artifact còn mới được lấy từ cache.
-3. **Biên tập** phát video, đồng bộ transcript và waveform; kéo vùng meme/SFX để đổi thời gian,
-   Accept/Reject, thay asset/vị trí/tỉ lệ/âm lượng rồi render lại.
+3. **Biên tập** phát video, đồng bộ transcript và waveform; kéo vùng meme/SFX/zoom để đổi thời
+   gian (tím = meme góc, đỏ = tràn màn hình, xanh = zoom, vàng = SFX), Accept/Reject rồi render
+   lại. Khi AI chọn meme chưa hợp:
+   - **Góc màn hình / Tràn màn hình**: bấm để đổi cách hiện ngay.
+   - **Meme khác phù hợp**: lưới gợi ý xếp theo truy vấn của AI (bù thêm phần còn lại của thư
+     viện); gõ từ khóa ("sốc", "cười", "xấu hổ"…) để tìm khác; bấm một meme là thay ngay. Vẫn có
+     danh sách toàn bộ thư viện ở ô "Hoặc chọn trong toàn bộ thư viện".
+   - **Chèn meme tại đây** (cạnh đồng hồ waveform): dừng ở chỗ AI bỏ sót, chọn chế độ và meme,
+     bấm "Chèn meme đã chọn". Meme mới được chấp nhận sẵn; code vẫn chặn nếu nó đè lên meme khác.
+   - Sự kiện **zoom** chỉnh được thời điểm và độ phóng.
+   Bản xem trước khi phát khớp bản render: meme tràn màn hình hiện giữa khung trên nền mờ, zoom
+   phóng video, meme góc bị giới hạn chiều cao như khi render.
 4. **Kho asset** nhận ảnh/GIF/video, nghe thử SFX và lọc theo loại. Nút cài riêng tải bộ
    100 meme, 30 GIF và 30 SFX.
 
@@ -622,7 +687,9 @@ automeme review data\input\video.mp4 --no-browser   # tự mở URL được in 
 
 Trang chỉ bind vào `127.0.0.1`, không public ra LAN/Internet và mỗi phiên có token riêng. Trong
 trang bạn có thể tua video, xem meme xuất hiện đúng thời điểm, đọc transcript, Accept/Reject,
-chọn asset khác từ `assets/memes` hoặc `assets/gifs`, sửa start/duration/vị trí/tỉ lệ rồi Render.
+chọn asset khác từ `assets/memes` hoặc `assets/gifs`, sửa start/duration/vị trí/tỉ lệ, đổi
+cách hiện (góc/tràn màn hình), chỉnh độ phóng của zoom rồi Render. Gợi ý meme và chèn meme mới
+chỉ có trong Studio.
 Mọi thay đổi được ghi ngay vào `timeline.json`. Reject không xóa event mà đặt
 `status: rejected`, vì vậy có thể Accept lại để hoàn tác.
 

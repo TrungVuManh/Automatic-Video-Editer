@@ -192,20 +192,24 @@ def test_builder_pro_cat_tran_man_hinh_kem_zoom_va_sfx_khong_lap(tmp_path):
     sound_asset.write_bytes(b"OggS")
     sounds = SoundProvider([_am("boom1"), _am("boom2")], sound_asset)
 
-    # hai khoảnh khắc đủ mạnh, cách nhau 20 s, AI không đề xuất SFX nào
+    # hai khoảnh khắc đủ mạnh cách nhau 20 s + hai khoảnh khắc thường; AI không đề xuất SFX nào
     timeline = build_timeline(
-        analysis(opportunity(0, 10, confidence=0.95), opportunity(1, 30, confidence=0.9)),
+        analysis(opportunity(0, 10, confidence=0.95), opportunity(1, 30, confidence=0.9),
+                 opportunity(2, 45, confidence=0.7), opportunity(3, 55, confidence=0.7)),
         provider, settings.ranking, top_k=10, project_root=tmp_path, video_duration=60,
         sfx_provider=sounds, sfx_settings=settings.sfx,
         cutaway_settings=settings.cutaway, meme_settings=settings.meme,
     )
     kinds = [(type(e).__name__, getattr(e, "mode", None)) for e in timeline.sorted_events()]
     assert kinds == [("ZoomEvent", None), ("MemeEvent", "cutaway"), ("SfxEvent", None),
-                     ("ZoomEvent", None), ("MemeEvent", "cutaway"), ("SfxEvent", None)]
-    cuts = [e for e in timeline.events if isinstance(e, MemeEvent)]
+                     ("ZoomEvent", None), ("MemeEvent", "cutaway"), ("SfxEvent", None),
+                     ("MemeEvent", "overlay"), ("MemeEvent", "overlay")]
+    cuts = [e for e in timeline.events if isinstance(e, MemeEvent) and e.mode == "cutaway"]
     assert all(0.8 <= e.duration <= 1.3 for e in cuts)  # cắt ngắn theo cấu hình
     sfx = [e for e in timeline.events if isinstance(e, SfxEvent)]
     assert [s.query for s in sfx] == ["impact", "impact"]  # SFX mặc định khi AI không đề xuất
+    # SFX lúc cắt dùng cutaway.sfx_volume (0.6) × mức khuyến nghị 0.8, to hơn SFX thường
+    assert [s.volume for s in sfx] == [0.48, 0.48]
     assert sounds.queries == ["impact", "impact"]  # mỗi cú cắt tìm SFX riêng
 
 
@@ -253,3 +257,48 @@ def test_bo_template_can_chu_va_luan_phien_vi_tri(tmp_path):
     assert [e.position for e in memes] == ["top-right", "bottom-right", "top-right"]
     assert all(e.mode == "overlay" for e in memes)
     assert not any(isinstance(e, ZoomEvent) for e in timeline.events)
+
+
+def test_cu_cat_khong_qua_nua_so_meme_va_uu_tien_co_sfx(tmp_path):
+    """Nghiệm thu livestream: qwen3 chấm 0.85 cho cả 4 meme → 3/4 thành cú cắt, quá dày."""
+    cfg = _pro(tmp_path).cutaway
+    items = [opportunity(0, 6.6, confidence=0.85), opportunity(1, 14.9, confidence=0.85),
+             opportunity(2, 33.8, confidence=0.85), opportunity(3, 67.5, confidence=0.85)]
+    items[1] = items[1].model_copy(update={"insert_sfx": True, "sfx_query": "impact"})
+    items[3] = items[3].model_copy(update={"insert_sfx": True, "sfx_query": "impact"})
+    # 90 s cho phép 3 cú cắt/phút-quota, nhưng 4 meme × 0.5 → tối đa 2; điểm bằng nhau → có SFX
+    assert pick_cutaways(items, cfg, 90) == {1, 3}
+    assert pick_cutaways(items[:1], cfg, 90) == {0}  # 1 meme vẫn được 1 cú cắt
+
+
+def test_cu_cat_thu_truy_van_sfx_mac_dinh_khi_file_cua_ai_vua_dung(tmp_path):
+    """Nghiệm thu livestream: SFX khớp truy vấn AI vừa dùng ở cú cắt trước → cú cắt sau câm."""
+    settings = _pro(tmp_path)
+    gif = tmp_path / "g.gif"
+    gif.write_bytes(b"GIF")
+    provider = Provider({"confused": [candidate("g", str(gif), 0.9).model_copy(
+        update={"type": "gif"})]})
+    sound_asset = tmp_path / "boom.ogg"
+    sound_asset.write_bytes(b"OggS")
+
+    class TheoTruyVan(SoundProvider):
+        def search(self, query, _limit=10):
+            self.queries.append(query)
+            sid = "bell" if query == "impact/nhấn mạnh" else "punch"
+            return [_am(sid).model_copy(update={"semantic_score": 1.0})]
+
+    sounds = TheoTruyVan([], sound_asset)
+    items = [opportunity(i, t, confidence=0.9).model_copy(
+        update={"insert_sfx": True, "sfx_query": "impact/nhấn mạnh"}) for i, t in
+        ((0, 10), (1, 40), (2, 50), (3, 55))]
+    timeline = build_timeline(
+        analysis(*items), provider, settings.ranking, top_k=10, project_root=tmp_path,
+        video_duration=60, sfx_provider=sounds, sfx_settings=settings.sfx,
+        cutaway_settings=settings.cutaway, meme_settings=settings.meme,
+    )
+    cut_starts = {e.start for e in timeline.events if isinstance(e, MemeEvent)
+                  and e.mode == "cutaway"}
+    sfx_on_cuts = [e for e in timeline.events if isinstance(e, SfxEvent)
+                   and e.start in cut_starts]
+    assert len(cut_starts) == 2 and len(sfx_on_cuts) == 2
+    assert sounds.queries[:3] == ["impact/nhấn mạnh", "impact/nhấn mạnh", "impact"]

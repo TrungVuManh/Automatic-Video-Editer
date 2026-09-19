@@ -79,29 +79,42 @@ function renderEvents() {
     const card = document.querySelector('#event-template').content.firstElementChild.cloneNode(true);
     card.dataset.id = event.id;
     card.classList.toggle('rejected', event.status === 'rejected');
-    card.querySelector('.event-index').textContent = `#${index + 1} · ${event.id}`;
+    const kind = event.type === 'zoom' ? 'zoom' : event.type === 'sfx' ? 'SFX'
+      : event.mode === 'cutaway' ? 'tràn màn hình' : 'meme góc';
+    card.querySelector('.event-index').textContent = `#${index + 1} · ${event.id} · ${kind}`;
     card.querySelector('.event-time').textContent = time(event.start);
     const badge = card.querySelector('.event-status');
     badge.textContent = event.status;
     badge.className = `event-status badge ${event.status}`;
-    const media = document.createElement(
-      event.type === 'sfx' ? 'audio' : isVideoAsset(event.asset) ? 'video' : 'img'
-    );
-    media.src = event.preview_url;
-    media.alt = 'Meme';
-    if (media.tagName === 'VIDEO') { media.controls = true; media.muted = true; media.loop = true; }
-    if (media.tagName === 'AUDIO') media.controls = true;
-    card.querySelector('.event-media').append(media);
+    if (event.type === 'zoom') {
+      // zoom không có file: chỉ mô tả, không tạo thẻ media với src rỗng
+      card.querySelector('.event-media').textContent = `Zoom ${event.factor.toFixed(2)}× vào khung hình gốc`;
+    } else {
+      const media = document.createElement(
+        event.type === 'sfx' ? 'audio' : isVideoAsset(event.asset) ? 'video' : 'img'
+      );
+      media.src = event.preview_url;
+      media.alt = 'Meme';
+      if (media.tagName === 'VIDEO') { media.controls = true; media.muted = true; media.loop = true; }
+      if (media.tagName === 'AUDIO') media.controls = true;
+      card.querySelector('.event-media').append(media);
+    }
     card.querySelector('.event-reason').textContent = event.reason || 'Không có ghi chú.';
     card.querySelector('.event-query').textContent = event.query ? `Query: ${event.query}` : '';
     card.querySelector('.start').value = event.start;
     card.querySelector('.duration').value = event.duration;
     card.querySelector('.position').value = event.position || '';
     card.querySelector('.scale').value = event.scale ?? '';
-    card.querySelector('.position').disabled = event.type === 'sfx';
-    card.querySelector('.scale').disabled = event.type === 'sfx';
+    const meme = event.type === 'meme';
+    card.querySelector('.position').disabled = !meme || event.mode === 'cutaway';
+    card.querySelector('.scale').disabled = !meme || event.mode === 'cutaway';
+    card.querySelector('.mode').value = event.mode || 'overlay';
+    card.querySelector('.mode-field').hidden = !meme;
+    card.querySelector('.factor').value = event.factor ?? '';
+    card.querySelector('.factor-field').hidden = event.type !== 'zoom';
+    card.querySelector('.asset-field').hidden = event.type === 'zoom';
     const asset = card.querySelector('.asset');
-    const options = new Set([
+    const options = new Set(event.type === 'zoom' ? [] : [
       event.asset, ...(event.type === 'sfx' ? (state.sfx_assets || []) : state.assets)
     ]);
     for (const path of options) {
@@ -137,9 +150,11 @@ async function saveEvent(card, id) {
   const body = {
     start: Number(card.querySelector('.start').value),
     duration: Number(card.querySelector('.duration').value),
-    asset: card.querySelector('.asset').value,
   };
-  if (current.type !== 'sfx') {
+  if (current.type === 'zoom') body.factor = Number(card.querySelector('.factor').value);
+  else body.asset = card.querySelector('.asset').value;
+  if (current.type === 'meme') {
+    body.mode = card.querySelector('.mode').value;
     body.position = card.querySelector('.position').value || null;
     body.scale = card.querySelector('.scale').value
       ? Number(card.querySelector('.scale').value) : null;
@@ -176,10 +191,13 @@ function renderTranscript() {
 
 function updateOverlay() {
   if (!state) return;
-  const current = state.events.find((event) =>
-    event.type === 'meme' && event.status !== 'rejected'
-    && video.currentTime >= event.start && video.currentTime <= event.start + event.duration
-  );
+  const active = state.events.filter((event) => event.status !== 'rejected'
+    && video.currentTime >= event.start && video.currentTime <= event.start + event.duration);
+  const zoom = active.find((event) => event.type === 'zoom');
+  video.style.transform = zoom ? `scale(${zoom.factor})` : '';
+  // meme tràn màn hình che mọi meme góc, giống bản render
+  const current = active.find((event) => event.type === 'meme' && event.mode === 'cutaway')
+    || active.find((event) => event.type === 'meme');
   if (!current) {
     overlay.className = '';
     overlay.removeAttribute('src');
@@ -194,12 +212,13 @@ function updateOverlay() {
   if (hiddenOverlay === videoOverlay) hiddenOverlay.pause();
   if (selectedEvent !== current.id || !selectedOverlay.src) selectedOverlay.src = current.preview_url;
   selectedEvent = current.id;
-  selectedOverlay.className = `visible ${current.position || 'bottom-right'}`;
-  selectedOverlay.style.width = `${(current.scale ?? 0.30) * 100}%`;
+  const cutaway = current.mode === 'cutaway';
+  selectedOverlay.className = `visible ${cutaway ? 'cutaway' : current.position || 'bottom-right'}`;
+  selectedOverlay.style.width = cutaway ? '' : `${(current.scale ?? 0.30) * 100}%`;
   if (selectedOverlay === videoOverlay) selectedOverlay.play().catch(() => {});
 }
 
-function isVideoAsset(asset) { return /\.(mp4|mov|mkv|webm)$/i.test(asset); }
+function isVideoAsset(asset) { return /\.(mp4|mov|mkv|webm)$/i.test(asset || ''); }
 
 video.addEventListener('timeupdate', updateOverlay);
 document.querySelector('#reload-button').addEventListener('click', loadState);

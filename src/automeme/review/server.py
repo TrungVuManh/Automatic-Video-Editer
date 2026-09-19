@@ -66,7 +66,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/state":
                 state = self.server.review_session.state()
                 for event in state["events"]:
-                    event["preview_url"] = "/media/asset?id=" + quote(event["id"], safe="")
+                    if event["type"] != "zoom":  # zoom không có file để xem trước
+                        event["preview_url"] = "/media/asset?id=" + quote(event["id"], safe="")
                 state["video_url"] = "/media/video"
                 self._json(HTTPStatus.OK, state)
                 return

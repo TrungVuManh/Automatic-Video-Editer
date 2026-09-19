@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .analyzer.base import StructuredLLM
-from .analyzer.context import build_context_windows
+from .analyzer.context import build_context_windows, split_long_segments
 from .analyzer.detector import FilterSettings, detect_opportunities, filter_opportunities
 from .analyzer.schema import Analysis, load_analysis, save_analysis
 from .cache import artifact_status, file_fingerprint, manifest_path, record_artifact, stable_key
@@ -101,6 +101,16 @@ def analyze_video(video: Path, settings: Settings, *, force: bool = False,
         log.info("Analysis cache %s; chạy lại bước phân tích.", _status_vi(status))
 
     transcript = read_json(paths.transcript)
+    if settings.analyzer.split_long_segments:
+        so_doan = len(transcript.get("segments") or [])
+        transcript = split_long_segments(
+            transcript,
+            max_seconds=settings.analyzer.max_segment_seconds,
+            min_pause=settings.analyzer.split_pause,
+        )
+        if len(transcript["segments"]) != so_doan:
+            log.info("Tách %d đoạn lời thoại thành %d câu ngắn theo khoảng lặng.",
+                     so_doan, len(transcript["segments"]))
     contexts = build_context_windows(
         transcript,
         previous_count=settings.analyzer.previous_segments,

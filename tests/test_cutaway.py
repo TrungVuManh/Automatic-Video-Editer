@@ -150,9 +150,12 @@ def test_hai_cu_cat_tran_man_hinh_trung_gio_la_loi():
     assert any("cùng tràn màn hình" in e for e in loi)
 
 
-def test_meme_goc_trong_luc_cat_tran_man_hinh_van_duoc():
+def test_meme_goc_trong_luc_cat_tran_man_hinh_la_loi():
+    """Renderer vẽ meme theo thứ tự sự kiện: meme góc bắt đầu sau sẽ đè lên cú cắt tràn màn hình."""
     goc = MemeEvent(id="m", start=10.2, duration=1, asset="b.png", position="bottom-right")
-    assert _loi(_cut(), goc) == []
+    assert any("chồng lên meme tràn màn hình" in e for e in _loi(_cut(), goc))
+    sau = MemeEvent(id="m", start=12, duration=1, asset="b.png", position="bottom-right")
+    assert _loi(_cut(), sau) == []
 
 
 def test_zoom_trung_nhau_la_loi_nhung_khong_can_file():

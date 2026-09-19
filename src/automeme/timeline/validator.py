@@ -89,14 +89,18 @@ def _vi_tri_hien_thi(e: MemeEvent) -> str:
 
 
 def _kiem_tra_chong_lan(events: list[MemeEvent]) -> list[str]:
-    """Hai meme cùng vị trí (hoặc cùng tràn màn hình) mà trùng thời gian sẽ đè lên nhau."""
+    """Hai meme cùng vị trí mà trùng thời gian sẽ đè lên nhau; meme tràn màn hình che cả khung
+    nên không được trùng thời gian với bất kỳ meme nào khác."""
     loi = []
     for i, a in enumerate(events):
         for b in events[i + 1:]:
             if b.start >= a.end:
                 break  # events đã sắp xếp theo start
-            if _vi_tri_hien_thi(a) == _vi_tri_hien_thi(b):
-                cho = "cùng tràn màn hình" if a.mode == "cutaway" else "cùng vị trí"
+            tran = {a.mode, b.mode} == {"cutaway"}
+            mot_tran = "cutaway" in {a.mode, b.mode}
+            if tran or mot_tran or _vi_tri_hien_thi(a) == _vi_tri_hien_thi(b):
+                cho = ("cùng tràn màn hình" if tran
+                       else "chồng lên meme tràn màn hình" if mot_tran else "cùng vị trí")
                 loi.append(f"{a.id} và {b.id} {cho} và trùng thời gian "
                            f"({format_ts(b.start)} → {format_ts(a.end)})")
     return loi

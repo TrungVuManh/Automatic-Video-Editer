@@ -74,6 +74,10 @@ class AnalyzerSettings(_Section):
     next_segments: int = Field(ge=0, le=10)
     timing_delay: float = Field(ge=0, le=2.0)
     max_tokens: int = Field(ge=128, le=8192)
+    # Tách đoạn Whisper dài (lời nói liền, không dấu câu) theo khoảng lặng giữa các từ
+    split_long_segments: bool = True
+    max_segment_seconds: float = Field(default=4.0, ge=1.0, le=30.0)
+    split_pause: float = Field(default=0.3, ge=0.05, le=2.0)
 
 
 class MemeSearchSettings(_Section):
@@ -147,12 +151,16 @@ class CutawaySettings(_Section):
 
     mode: Literal["never", "auto"]          # builder có tự tạo cú cắt tràn màn hình không
     max_per_minute: float = Field(gt=0)
+    # tỉ lệ tối đa số meme được cắt tràn màn hình (cú cắt phải hiếm mới có sức nặng)
+    max_share: float = Field(default=0.5, gt=0, le=1)
     cooldown: float = Field(ge=0)           # giây giữa hai cú cắt (đầu → đầu)
     min_confidence: float = Field(ge=0, le=1)
     duration_min: float = Field(ge=0.3, le=5)
     duration_max: float = Field(ge=0.3, le=5)
     sfx_on_cut: bool                         # mỗi cú cắt kèm một SFX
     sfx_query: str                           # truy vấn SFX khi AI không đề xuất
+    # âm lượng SFX lúc cắt (thay sfx.volume, vẫn nhân mức khuyến nghị của từng âm)
+    sfx_volume: float = Field(default=0.6, ge=0, le=1)
     punch_zoom: bool                         # zoom vào gameplay ngay trước cú cắt
     zoom_factor: float = Field(ge=1.01, le=1.5)
     zoom_duration: float = Field(gt=0, le=3)

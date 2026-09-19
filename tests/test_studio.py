@@ -392,3 +392,95 @@ def test_studio_server_endpoint_tai_youtube(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_studio_server_goi_y_thay_meme_them_meme_va_zoom(studio):
+    """Người duyệt tự quyết meme: xem gợi ý + xem trước, đổi sang tràn màn hình, thêm meme,
+    chỉnh zoom; zoom không có file xem trước."""
+    from automeme.review.service import ReviewSession
+    from automeme.timeline.schema import MemeEvent, Timeline, ZoomEvent, save_timeline
+
+    settings = studio.settings
+    root = settings.paths.assets_dir.parent
+    memes = settings.paths.assets_dir / "memes"
+    memes.mkdir(parents=True)
+    (memes / "a.png").write_bytes(b"PNG-A")
+    (memes / "b.gif").write_bytes(b"GIF-B")
+    (root / "clip.mp4").write_bytes(b"video")
+    settings.meme.library_file.write_text(
+        '{"id": "soc", "filename": "assets/memes/b.gif", "type": "gif", '
+        '"description": "shocked reaction"}\n', encoding="utf-8")
+    timeline_path = settings.paths.data_dir / "timelines" / "clip.timeline.json"
+    save_timeline(timeline_path, Timeline(video="clip.mp4", events=[
+        ZoomEvent(id="event_001", start=0.7, duration=0.4),
+        MemeEvent(id="event_002", start=1, duration=1, asset="assets/memes/a.png",
+                  query="shocked"),
+    ]))
+    studio._reviews["clip.mp4"] = ReviewSession(
+        video=root / "clip.mp4", timeline_path=timeline_path, settings=settings,
+        output=root / "out.mp4", video_duration=30,
+    )
+    server = create_studio_server(studio, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+    token = {"X-Automeme-Token": server.session_token}
+
+    def get(path):
+        connection.request("GET", path, headers=token)
+        response = connection.getresponse()
+        return response.status, response.read()
+
+    def post(path, payload):
+        body = json.dumps(payload).encode()
+        connection.request("POST", path, body=body, headers={
+            **token, "Content-Type": "application/json", "Content-Length": str(len(body))})
+        response = connection.getresponse()
+        return response.status, json.loads(response.read())
+
+    try:
+        status, body = get("/api/project?video=clip.mp4")
+        events = {e["id"]: e for e in json.loads(body)["events"]}
+        assert status == 200 and "preview_url" not in events["event_001"]
+        assert "preview_url" in events["event_002"]
+
+        status, body = get("/api/suggestions?video=clip.mp4&id=event_002")
+        items = json.loads(body)["items"]
+        assert status == 200 and items[0]["asset"] == "assets/memes/b.gif"
+        assert get(items[0]["preview_url"]) == (200, b"GIF-B")
+        assert get("/media/asset-file?video=clip.mp4&path=..%2F..%2Fsecret.txt")[0] == 404
+        assert get("/api/suggestions?video=clip.mp4&id=event_001")[0] == 404  # zoom
+
+        status, data = post("/api/events/event_002/update?video=clip.mp4",
+                            {"asset": "assets/memes/b.gif", "mode": "cutaway"})
+        assert status == 200 and data["event"]["mode"] == "cutaway"
+        status, data = post("/api/events/event_001/update?video=clip.mp4", {"factor": 1.2})
+        assert status == 200 and data["event"]["factor"] == 1.2
+        status, data = post("/api/events/event_001/update?video=clip.mp4", {"asset": "x"})
+        assert status == 400
+
+        status, data = post("/api/events/add?video=clip.mp4",
+                            {"start": 12, "asset": "assets/memes/a.png"})
+        assert status == 201 and data["event"]["id"] == "event_003"
+        assert data["event"]["status"] == "accepted"
+        status, data = post("/api/events/add?video=clip.mp4",
+                            {"start": 12, "asset": "../secret.png"})
+        assert status == 400
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_static_ui_bien_tap_tran_man_hinh_goi_y_va_zoom():
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_DIR / "style.css").read_text(encoding="utf-8")
+    assert 'id="add-meme-button"' in html and 'id="meme-overlay-video"' in html
+    for needle in ("/api/suggestions?", "/api/events/add?", 'data-mode="cutaway"',
+                   "Tràn màn hình", "event-factor", "pro:["):
+        assert needle in js
+    # thẻ gợi ý dùng data-pick: renderLibrary gắn onclick cho mọi [data-asset] trên trang
+    assert "data-pick=" in js and 'class="suggestion-card' in js
+    assert "#meme-overlay.cutaway" in css and "backdrop-filter" in css

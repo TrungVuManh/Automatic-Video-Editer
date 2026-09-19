@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from pydantic import ValidationError
 
-from ..review.service import EventPatch, ReviewError
+from ..review.service import AddMemePayload, EventPatch, ReviewError
 from ..timeline.schema import TimelineError
 from ..utils.logger import log
 from .service import DownloadRequest, JobRequest, MetadataPatch, StudioError, StudioService
@@ -76,6 +76,8 @@ class StudioHandler(BaseHTTPRequestHandler):
                 state = session.state()
                 video_name = quote(session.video.name, safe="")
                 for event in state["events"]:
+                    if event["type"] == "zoom":
+                        continue  # zoom không có file để xem trước
                     event["preview_url"] = (
                         f"/media/event?video={video_name}&id={quote(event['id'], safe='')}"
                     )
@@ -83,6 +85,24 @@ class StudioHandler(BaseHTTPRequestHandler):
                 state["output_url"] = f"/media/output?video={video_name}"
                 state["output_exists"] = session.output.is_file()
                 self._json(HTTPStatus.OK, state)
+            elif parsed.path == "/api/suggestions":
+                video_name = self._query(query, "video")
+                session = self.server.studio.review(video_name)
+                mode = (query.get("mode") or [""])[0]
+                items = session.suggestions(
+                    (query.get("id") or [""])[0] or None,  # không có id: tìm meme để chèn mới
+                    query=(query.get("q") or [""])[0],
+                    mode=mode if mode in ("overlay", "cutaway") else None,
+                )
+                for item in items:
+                    item["preview_url"] = (
+                        f"/media/asset-file?video={quote(video_name, safe='')}"
+                        f"&path={quote(item['asset'], safe='')}"
+                    )
+                self._json(HTTPStatus.OK, {"items": items})
+            elif parsed.path == "/media/asset-file":
+                session = self.server.studio.review(self._query(query, "video"))
+                self._serve_file(session.asset_file(self._query(query, "path")))
             elif parsed.path == "/media/video":
                 self._serve_file(self.server.studio.video_path(self._query(query, "video")))
             elif parsed.path == "/media/output":
@@ -149,6 +169,18 @@ class StudioHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/render":
                 output = self.server.studio.review(self._query(query, "video")).render()
                 self._json(HTTPStatus.OK, {"ok": True, "output": str(output)})
+                return
+            if parsed.path == "/api/events/add":
+                payload = AddMemePayload.model_validate(self._read_json())
+                session = self.server.studio.review(self._query(query, "video"))
+                timeline, event_id = session.add_meme(
+                    start=payload.start, asset=payload.asset, mode=payload.mode,
+                )
+                event = next(event for event in timeline.events if event.id == event_id)
+                self._json(HTTPStatus.CREATED, {
+                    "ok": True,
+                    "event": event.model_dump(mode="json"),
+                })
                 return
             metadata = re.fullmatch(r"/api/library/([^/]+)", parsed.path)
             if metadata:
