@@ -136,7 +136,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
 | Tải video cần đăng nhập (riêng tư, giới hạn tuổi, hội viên) | Chưa hỗ trợ cookie — báo lỗi rõ |
-| **qwen3:8b chấm điểm không phân biệt** | Đã thêm thang điểm vào prompt: số meme giữ lại giảm từ 7/10 xuống 4/26 câu, nhưng cả 4 vẫn đúng 0,85 → thứ tự cú cắt dựa vào luật phụ (có SFX, sớm hơn). Có thể thử model lớn hơn hoặc Claude |
+| **Chọn câu đùa còn yếu** | qwen3:8b cho mọi đề xuất 0,85 → thứ tự cú cắt dựa vào luật phụ. Đã thử qwen3:14b (phiên 16): điểm có phân biệt nhưng chọn kém hơn (3/6 vs 5/6) và chậm 2,6× → **giữ 8b**. Giới hạn chính là transcript (sai từ lóng, không dấu câu, không thấy hình). Hướng tiếp: Claude qua `LLM_BACKEND=claude` (tốn phí), cải thiện transcript, lọc câu Whisper bịa |
 | **Một số template vẫn có vùng chữ trống** | Đã loại 12 nhãn phong cách cần chữ (profile `pro`), nhưng ảnh như Monkey Puppet vẫn có dải trắng phía trên. Cần gắn nhãn thủ công trong kho hoặc cắt dải trắng |
 | Nhận dạng từ mượn tiếng Anh / từ lóng | "live được hai nền tảng" → "lấy lại được hai nền tảng"; "đổi gió" → "đổi giống như". Có thể thử `initial_prompt` (từ vựng stream + dấu câu) |
 | Caption, zoom độc lập (không đi kèm cú cắt) | SPEC §71–73 — `cutaway`, `sfx`, `zoom` đã có; caption và zoom theo nhịp gameplay chưa làm |
@@ -167,8 +167,12 @@ https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `
   quyền; bản ghi dài hàng giờ nên luôn tải theo đoạn.
 - **Đã có (kiểm tra 2026-09-17):** ứng dụng Ollama 0.34.0 (chưa tự chạy khi mở máy — cần mở app
   hoặc `ollama serve`) và model `qwen3:8b` 5,2 GB. **Chưa có:** file `.env`.
-- **Ổ C chỉ còn ~9,6 GB trống** (model Whisper/HF cache và Ollama đều nằm ở C). Nếu tải thêm
-  model, cân nhắc đặt `HF_HOME` / `OLLAMA_MODELS` sang ổ D.
+- **Ổ C chỉ còn ~5,5 GB trống** (đo 2026-09-19; model Whisper/HF cache và Ollama đều nằm ở C).
+  RAM 16 GB. `qwen3:14b` (9,3 GB) đã tải vào **`D:\OllamaModels`** để thử — ứng dụng Ollama
+  thường không thấy thư mục này; muốn dùng thì chạy
+  `$env:OLLAMA_MODELS='D:\OllamaModels'; $env:OLLAMA_HOST='127.0.0.1:11435'; ollama serve`
+  rồi đặt `OLLAMA_HOST=http://127.0.0.1:11435`, `OLLAMA_MODEL=qwen3:14b` khi chạy automeme.
+  Không dùng nữa thì xoá thư mục đó.
 - 8 GB VRAM đủ cho Whisper large-v3 *hoặc* qwen3:8b, không đủ nạp cả hai cùng lúc → phải giải
   phóng Whisper trước khi gọi Ollama (Ollama giữ model trong VRAM ~5 phút sau lần gọi cuối).
 
@@ -409,7 +413,8 @@ web để tự quyết định meme"):
 ### Tiếp theo
 
 Đã nghiệm thu với Ollama + kho meme thật (2026-09-17) và dựng kiểu `pro` trên livestream
-(2026-09-19). Còn: chọn câu đùa tốt hơn (qwen3:8b chấm điểm đồng đều — thử model lớn hơn/Claude);
+(2026-09-19). Còn: chọn câu đùa tốt hơn (qwen3:14b đã thử, không tốt hơn — thử Claude hoặc
+cải thiện transcript; lọc câu Whisper bịa như "Cảm ơn các bạn đã theo dõi…");
 cải thiện chọn meme khi không có Meme Search (tìm kiếm chữ không hiểu đồng nghĩa); caption và
 zoom theo nhịp gameplay; kiểm tra thêm media meme dạng video.
 Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke → `CaptionEvent`),
@@ -503,6 +508,41 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-19 (phiên 16) — Thử model lớn hơn: qwen3:14b (Claude Code)
+
+**Yêu cầu.** "Hãy thử model lớn hơn". Máy: RTX 4060 Laptop 8 GB, RAM 16 GB, ổ C còn 5,5 GB →
+`qwen3:30b` (19 GB) không vừa; chọn `qwen3:14b` (9,3 GB, cùng họ nên so công bằng). Tải vào
+`D:\OllamaModels` qua một server Ollama riêng ở cổng 11435 (không đổi cấu hình Ollama của người
+dùng, không tốn chỗ ổ C). Không sửa code: model đã chỉnh được bằng `OLLAMA_MODEL`/`OLLAMA_HOST`.
+
+**Cách đo.** Cùng transcript (28 câu sau khi tách), cùng prompt, `--profile pro`. Đáp án tham
+chiếu lập trước khi chạy 14b, từ lời thoại + khung hình: **mạnh** — câu 20 (63,7 s, cảm thán
+"…lôi đâu ra đấy" khi cười với chat), câu 9 (30,5 s, game hiện "Here's the first one…" — tìm được
+cầu chì); **vừa** — câu 15 (51,6 s, đùa "ăn cứt"), câu 5 (14,8 s, kết chuyện "cậu ăn phở"). Meme
+tính là trúng nếu bắt đầu trong khoảng [đầu câu − 1 s, cuối câu + 1,5 s].
+
+| | qwen3:8b | qwen3:14b |
+|---|---|---|
+| Thời gian phân tích 28 câu | ~3,5 phút (7,5 s/câu) | 9 phút 14 s (~20 s/câu) |
+| JSON hợp lệ | 26/28 | 28/28 |
+| Điểm confidence | 0,85 ×4 | 0,85, 0,75 ×3 |
+| Meme (cú cắt) | 6,6 · **14,9** · 33,8 · **67,5** | 51,7 · **63,8** · 73,2 · 86,9 |
+| Trúng tham chiếu | câu 20, 9, 5 → **5/6**, thừa 1 | câu 20, 15 → **3/6**, thừa 2 |
+
+14b có hai điểm tốt: điểm phân biệt nên luật `min_confidence 0,8` chỉ cho **một** cú cắt, đúng
+khoảnh khắc mạnh nhất; không lỗi schema. Nhưng bỏ sót khoảnh khắc tìm cầu chì, lý do vẫn chung
+chung ("mang tính mỉa mai" cho cả 4) và chèn ở 86,9 s vì hiểu "hình yêu" (lỗi nhận dạng) là chơi
+chữ. **Kết luận: giữ qwen3:8b mặc định.** Một đoạn 90 s là mẫu nhỏ; kết luận chắc hơn cần thêm
+đoạn. Output để so: `data/output/..._pro-qwen3-8b.mp4`, `..._pro-qwen3-14b.mp4` (bản
+`_automeme.mp4` hiện là của 14b).
+
+**Phát hiện thêm.** Whisper bịa câu cuối "Cảm ơn các bạn đã theo dõi và hẹn gặp lại." dài 0,04 s
+(câu 27) — lỗi quen thuộc của Whisper ở đoạn im lặng; cả hai model đều không chọn câu này nhưng
+nên lọc ở bước chuẩn hóa transcript (chưa làm, chờ duyệt).
+
+**Dọn dẹp.** Đã tắt server Ollama tạm và ứng dụng Ollama (lỡ khởi động khi gọi `ollama list`).
+`D:\OllamaModels` (9,3 GB) được giữ lại — xoá nếu không dùng.
 
 ### 2026-09-19 (phiên 15) — Dựng kiểu chuyên nghiệp + người duyệt tự quyết meme (Claude Code)
 

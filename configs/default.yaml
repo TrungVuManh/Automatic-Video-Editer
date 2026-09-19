@@ -29,7 +29,7 @@ llm:
 
 ollama:
   host: http://localhost:11434
-  model: qwen3:8b            # máy yếu hơn: qwen3:4b
+  model: qwen3:8b            # máy yếu hơn: qwen3:4b; qwen3:14b chậm ~2,6× mà không tốt hơn (HANDOFF phiên 16)
 
 claude:
   model: claude-sonnet-5

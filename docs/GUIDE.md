@@ -195,7 +195,7 @@ nằm trong `configs/default.yaml`.
 | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | `false` | Đặt `true` nếu muốn Whisper dùng câu trước làm ngữ cảnh (chính xác hơn một chút nhưng dễ lặp chữ) |
 | `LLM_BACKEND` | `ollama` | `claude` để dùng Claude API |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama chạy ở máy khác |
-| `OLLAMA_MODEL` | `qwen3:8b` | GPU dưới 8 GB VRAM: `qwen3:4b` |
+| `OLLAMA_MODEL` | `qwen3:8b` | GPU dưới 8 GB VRAM: `qwen3:4b`. `qwen3:14b` chạy được trên GPU 8 GB (tràn một phần sang RAM) nhưng xem ghi chú bên dưới |
 | `MEME_TIMING_DELAY` | `0.15` | Độ trễ từ cuối câu đến lúc meme bắt đầu; thường giữ 0.10–0.30 giây |
 | `MEME_LIBRARY_FILE` | `assets/memes/library.jsonl` | Metadata cho thư viện local |
 | `SFX_ENABLED`, `SFX_VOLUME` | `true`, `0.35` | Bật/tắt SFX tự động và chỉnh master volume |
@@ -211,6 +211,16 @@ nằm trong `configs/default.yaml`.
 
 > **VRAM 8 GB:** Whisper `large-v3` và `qwen3:8b` không nạp cùng lúc được, nên pipeline chạy
 > lần lượt. Nếu vẫn thiếu VRAM: `OLLAMA_MODEL=qwen3:4b` hoặc `WHISPER_COMPUTE_TYPE=int8_float16`.
+
+> **Model lớn hơn chưa chắc tốt hơn.** Đã thử `qwen3:14b` trên cùng đoạn livestream 90 giây
+> (RTX 4060 8 GB): chậm gấp ~2,6 lần (20 giây/câu thay vì 7,5), chấm điểm có phân biệt hơn và
+> không lỗi JSON, nhưng chọn trúng ít khoảnh khắc hay hơn `qwen3:8b` (3/6 so với 5/6 điểm) và
+> hiểu lầm một lỗi nhận dạng giọng nói. Giới hạn chính nằm ở transcript (sai từ lóng, không dấu
+> câu, không thấy hình), không phải cỡ model. Nên giữ `qwen3:8b`.
+>
+> Muốn thử model khác mà ổ C đầy: đặt thư mục model của Ollama sang ổ khác trước khi tải —
+> biến môi trường người dùng `OLLAMA_MODELS=D:\OllamaModels`, chuyển thư mục
+> `%USERPROFILE%\.ollama\models` sang đó, rồi mở lại ứng dụng Ollama.
 
 Các biến dựng video (`MEME_COOLDOWN`, `MAX_MEMES_PER_MINUTE`…) trong `.env.example` được để
 dạng comment. Bỏ comment một dòng là ghi đè giá trị đó cho **mọi** profile — `--profile` sẽ
