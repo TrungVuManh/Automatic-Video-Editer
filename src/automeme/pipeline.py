@@ -18,11 +18,11 @@ from .config import Settings
 from .media.audio import extract_audio
 from .media.probe import probe
 from .memes.base import MemeProvider
-from .rendering.filters import build_render_plan
+from .rendering.filters import build_render_plan, cutaway_style
 from .rendering.renderer import render
 from .sfx.library import LocalSfxProvider
 from .timeline.builder import build_timeline
-from .timeline.schema import Timeline, load_timeline, save_timeline
+from .timeline.schema import Timeline, has_asset, load_timeline, save_timeline
 from .timeline.validator import resolve_asset, validate_timeline
 from .transcription.base import Transcriber
 from .transcription.normalize import normalize_transcript, validate_transcript
@@ -190,10 +190,12 @@ def build_video_timeline(video: Path, settings: Settings, *, force: bool = False
         video_duration=info.duration,
         sfx_provider=sound_source,
         sfx_settings=settings.sfx,
+        cutaway_settings=settings.cutaway,
+        meme_settings=settings.meme,
     )
     asset_paths = {
         event.asset: resolve_asset(event.asset, _goc_du_an(settings), settings.paths.assets_dir)
-        for event in timeline.events
+        for event in timeline.events if has_asset(event)
     }
     errors, warnings = validate_timeline(
         timeline,
@@ -270,7 +272,8 @@ def render_timeline(video: Path, settings: Settings, *, timeline_path: Path | No
     thong_tin = probe(video)
     events = timeline.active_events()
     asset_paths = {e.asset: resolve_asset(e.asset, _goc_du_an(settings),
-                                          settings.paths.assets_dir) for e in events}
+                                          settings.paths.assets_dir)
+                   for e in events if has_asset(e)}
 
     loi, canh_bao = validate_timeline(timeline, video_duration=thong_tin.duration,
                                       asset_paths=asset_paths, meme_cfg=settings.meme,
@@ -296,13 +299,15 @@ def render_timeline(video: Path, settings: Settings, *, timeline_path: Path | No
     if not force and status == "stale":
         log.info("Output cũ do automeme tạo không còn khớp timeline/cấu hình; render lại.")
 
-    plan = build_render_plan(events, [asset_paths[e.asset] for e in events],
+    plan = build_render_plan(events,
+                             [asset_paths[e.asset] if has_asset(e) else None for e in events],
                              video_w=thong_tin.width or 1920, video_h=thong_tin.height or 1080,
                              scale_default=settings.meme.scale_default,
                              position_default=settings.meme.position_default,
                              margin_ratio=settings.meme.margin_ratio,
                              max_height_ratio=settings.meme.max_height_ratio,
-                             has_audio=thong_tin.has_audio)
+                             has_audio=thong_tin.has_audio, fps=thong_tin.fps,
+                             style=cutaway_style(settings.cutaway))
     log.info("Render %d sự kiện vào %s...", len(events), video.name)
     render(video, out, plan, video_codec=settings.output.video_codec, crf=settings.output.crf,
            preset=settings.output.preset, audio_codec=settings.output.audio_codec)
@@ -357,6 +362,10 @@ def _timeline_input_key(video: Path, analysis: Path, settings: Settings,
         "ranking": settings.ranking.model_dump(mode="json"),
         "sfx": settings.sfx.model_dump(mode="json"),
         "sfx_library": _file_identity(settings.sfx.library_file),
+        # đổi cách dựng (tràn màn hình, zoom, style bị loại, vị trí) thì phải dựng lại timeline
+        "cutaway": settings.cutaway.model_dump(mode="json"),
+        "meme": settings.meme.model_dump(mode="json", include={
+            "duration_min", "duration_max", "exclude_styles", "position_cycle"}),
     })
 
 

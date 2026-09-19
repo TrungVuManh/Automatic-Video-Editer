@@ -8,9 +8,9 @@ Timeline hỗ trợ cả overlay `meme` và âm thanh ngắn `sfx`.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, ValidationError
 
 from ..utils.files import read_json, write_json
 
@@ -32,7 +32,9 @@ class MemeEvent(BaseModel):
     start: float = Field(ge=0)
     duration: float = Field(gt=0)
     asset: str
-    mode: Literal["overlay"] = "overlay"  # cutaway làm ở giai đoạn sau (SPEC §36)
+    # overlay: meme ở góc, video gốc vẫn thấy. cutaway: meme tràn màn hình (SPEC §36) —
+    # dành cho punchline mạnh nhất; position/scale bị bỏ qua.
+    mode: Literal["overlay", "cutaway"] = "overlay"
     # Để trống thì lấy mặc định trong configs/ (meme.position_default, meme.scale_default)
     position: ViTri | None = None
     scale: float | None = Field(default=None, ge=SCALE_MIN, le=SCALE_MAX)
@@ -67,7 +69,54 @@ class SfxEvent(BaseModel):
         return round(self.start + self.duration, 3)
 
 
-TimelineEvent = MemeEvent | SfxEvent
+ZOOM_MIN, ZOOM_MAX = 1.01, 1.5
+
+
+class ZoomEvent(BaseModel):
+    """Zoom nhanh vào khung hình gốc (SPEC §72) — thường đặt ngay trước cú cắt tràn màn hình."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    type: Literal["zoom"] = "zoom"
+    start: float = Field(ge=0)
+    duration: float = Field(gt=0, le=3)
+    factor: float = Field(default=1.1, ge=ZOOM_MIN, le=ZOOM_MAX)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    query: str | None = None
+    reason: str | None = None
+    status: Literal["pending", "accepted", "rejected"] = "pending"
+
+    @property
+    def end(self) -> float:
+        return round(self.start + self.duration, 3)
+
+
+LOAI_SU_KIEN = ("meme", "sfx", "zoom")
+
+
+def _loai_su_kien(value: Any) -> str:
+    """Phân loại sự kiện theo khóa `type`. Timeline cũ không ghi `type` → coi là meme.
+
+    Không để pydantic tự thử từng loại: zoom chỉ cần id/start/duration nên một meme thiếu
+    `asset` sẽ bị hiểu nhầm thành zoom thay vì báo lỗi.
+    """
+    if isinstance(value, dict):
+        return str(value.get("type", "meme"))
+    return str(getattr(value, "type", "meme"))
+
+
+TimelineEvent = Annotated[
+    Annotated[MemeEvent, Tag("meme")]
+    | Annotated[SfxEvent, Tag("sfx")]
+    | Annotated[ZoomEvent, Tag("zoom")],
+    Discriminator(_loai_su_kien),
+]
+
+
+def has_asset(event: TimelineEvent) -> bool:
+    """Sự kiện có file đi kèm (meme, SFX). Zoom chỉ biến đổi khung hình gốc nên không có."""
+    return not isinstance(event, ZoomEvent)
 
 
 class Timeline(BaseModel):
@@ -111,10 +160,14 @@ def format_timeline_error(e: ValidationError) -> str:
     lines = []
     for err in e.errors():
         loc = list(err["loc"])
-        # ('events', 0, 'position') → "sự kiện #0 → position"
+        # ('events', 0, 'sfx', 'position') → "sự kiện #0 (type=sfx) → position"
         if len(loc) >= 2 and loc[0] == "events":
+            loai = ""
+            if len(loc) >= 3 and loc[2] in LOAI_SU_KIEN:
+                loai = f" (type={loc[2]})"
+                loc = loc[:2] + loc[3:]
             duoi = "" if len(loc) < 3 else " → " + ".".join(map(str, loc[2:]))
-            cho = f"sự kiện #{loc[1]}{duoi}"
+            cho = f"sự kiện #{loc[1]}{loai}{duoi}"
         else:
             cho = ".".join(map(str, loc)) or "(gốc)"
         value = err.get("input")

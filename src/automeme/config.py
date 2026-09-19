@@ -97,6 +97,12 @@ class MemeSettings(_Section):
     position_default: Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
     margin_ratio: float = Field(ge=0, le=0.2)
     max_height_ratio: float = Field(ge=0.1, le=1.0)
+    # Nhãn phong cách không được tự chọn (template cần chữ mới hiểu: comparison, dialogue…)
+    exclude_styles: list[str] = Field(default_factory=list)
+    # Vị trí luân phiên cho meme ở góc; trống = luôn dùng position_default
+    position_cycle: list[
+        Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
+    ] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _min_khong_vuot_max(self) -> MemeSettings:
@@ -133,6 +139,38 @@ class RankingSettings(_Section):
         )
         if abs(total - 1.0) > 1e-6:
             raise ValueError(f"tổng năm trọng số phải bằng 1.0 (đang là {total:g})")
+        return self
+
+
+class CutawaySettings(_Section):
+    """Meme tràn màn hình + zoom + âm thanh đi kèm (SPEC §36, §72)."""
+
+    mode: Literal["never", "auto"]          # builder có tự tạo cú cắt tràn màn hình không
+    max_per_minute: float = Field(gt=0)
+    cooldown: float = Field(ge=0)           # giây giữa hai cú cắt (đầu → đầu)
+    min_confidence: float = Field(ge=0, le=1)
+    duration_min: float = Field(ge=0.3, le=5)
+    duration_max: float = Field(ge=0.3, le=5)
+    sfx_on_cut: bool                         # mỗi cú cắt kèm một SFX
+    sfx_query: str                           # truy vấn SFX khi AI không đề xuất
+    punch_zoom: bool                         # zoom vào gameplay ngay trước cú cắt
+    zoom_factor: float = Field(ge=1.01, le=1.5)
+    zoom_duration: float = Field(gt=0, le=3)
+    inset: float = Field(ge=0.5, le=1)
+    blur: int = Field(ge=0, le=60)
+    darken: float = Field(ge=-1, le=0)
+    settle_zoom: float = Field(ge=1, le=1.3)
+    settle_time: float = Field(ge=0, le=1)
+    fade_in: float = Field(ge=0, le=1)
+    fade_out: float = Field(ge=0, le=1)
+    duck_volume: float = Field(ge=0, le=1)
+    duck_ramp: float = Field(gt=0, le=1)
+    limiter: float = Field(ge=0.0625, le=1)  # trần đỉnh âm cho alimiter (0.891 ≈ −1 dBFS)
+
+    @model_validator(mode="after")
+    def _khoang_thoi_luong(self) -> CutawaySettings:
+        if self.duration_min > self.duration_max:
+            raise ValueError("cutaway.duration_min lớn hơn duration_max")
         return self
 
 
@@ -173,6 +211,7 @@ class Settings(_Section):
     meme: MemeSettings
     sfx: SfxSettings
     ranking: RankingSettings
+    cutaway: CutawaySettings
     download: DownloadSettings
     output: OutputSettings
 

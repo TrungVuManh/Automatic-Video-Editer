@@ -1,0 +1,27 @@
+# Dựng kiểu kênh game chuyên nghiệp (tham chiếu phân tích kênh HK15, HANDOFF phiên 14):
+# ít hiệu ứng nhưng trúng punchline, meme ngắn, cú cắt tràn màn hình + zoom + SFX cho khoảnh khắc
+# mạnh nhất, SFX không lặp, không dùng template phải có chữ mới hiểu.
+#   automeme run <video hoặc link> --profile pro
+
+editing:
+  max_memes_per_minute: 3
+  cooldown: 8
+  threshold: 0.75
+
+meme:
+  duration_min: 0.8
+  duration_max: 1.3
+  # Template Imgflip cần điền chữ (so sánh, hội thoại, lựa chọn…) — chèn trống chữ thì vô nghĩa
+  exclude_styles: [comparison, story, dialogue, choice, advice, chart, multi-panel, offer,
+                   debate, explanation, statement, announcement]
+  # Luân phiên hai góc phải: facecam của streamer thường ở góc trái
+  position_cycle: [top-right, bottom-right]
+
+cutaway:
+  mode: auto
+  max_per_minute: 2
+  min_confidence: 0.8
+
+sfx:
+  max_per_minute: 3
+  cooldown: 10

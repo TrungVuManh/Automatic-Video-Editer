@@ -111,7 +111,7 @@ def inspect(
 ) -> None:
     """Xem lại timeline và kiểm tra trước khi render."""
     from .media.probe import probe
-    from .timeline.schema import TimelineError, load_timeline
+    from .timeline.schema import TimelineError, has_asset, load_timeline
     from .timeline.validator import format_timeline_table, resolve_asset, validate_timeline
 
     settings = bootstrap(profile)
@@ -130,7 +130,7 @@ def inspect(
 
     goc = settings.paths.assets_dir.parent
     asset_paths = {e.asset: resolve_asset(e.asset, goc, settings.paths.assets_dir)
-                   for e in tl.events}
+                   for e in tl.events if has_asset(e)}
     loi, canh_bao = validate_timeline(tl, video_duration=thoi_luong, asset_paths=asset_paths,
                                       meme_cfg=settings.meme, editing_cfg=settings.editing)
     typer.echo(format_timeline_table(tl, loi, canh_bao, thoi_luong))

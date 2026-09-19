@@ -18,6 +18,7 @@ from ..timeline.schema import (
     SfxEvent,
     Timeline,
     ViTri,
+    has_asset,
     load_timeline,
     save_timeline,
 )
@@ -169,6 +170,8 @@ class ReviewSession:
             event = next((item for item in timeline.events if item.id == event_id), None)
             if event is None:
                 raise ReviewError(f"Không có sự kiện {event_id!r}.")
+            if not has_asset(event):
+                raise ReviewError(f"{event_id} là zoom, không có file để xem trước.")
             path = resolve_asset(
                 event.asset,
                 self.settings.paths.assets_dir.parent,
@@ -223,7 +226,7 @@ class ReviewSession:
         root = self.settings.paths.assets_dir.parent
         asset_paths = {
             event.asset: resolve_asset(event.asset, root, self.settings.paths.assets_dir)
-            for event in timeline.active_events()
+            for event in timeline.active_events() if has_asset(event)
         }
         return validate_timeline(
             timeline,

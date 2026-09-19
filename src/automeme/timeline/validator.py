@@ -15,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..utils.timestamps import format_ts
-from .schema import SCALE_MAX, SCALE_MIN, MemeEvent, Timeline
+from .schema import SCALE_MAX, SCALE_MIN, MemeEvent, Timeline, ZoomEvent, has_asset
 
 # Sai lệch cho phép khi so thời điểm kết thúc với thời lượng video (giây)
 DUNG_SAI = 0.05
@@ -57,10 +57,11 @@ def validate_timeline(timeline: Timeline, *, video_duration: float | None,
         if video_duration is not None and e.end > video_duration + DUNG_SAI:
             loi.append(f"{e.id}: kết thúc ở {format_ts(e.end)} nhưng video chỉ dài "
                        f"{format_ts(video_duration)}")
-        duong_dan = asset_paths.get(e.asset)
-        if duong_dan is None or not ton_tai(duong_dan):
-            kind = "meme" if isinstance(e, MemeEvent) else "SFX"
-            loi.append(f"{e.id}: không thấy file {kind} {e.asset}")
+        if has_asset(e):
+            duong_dan = asset_paths.get(e.asset)
+            if duong_dan is None or not ton_tai(duong_dan):
+                kind = "meme" if isinstance(e, MemeEvent) else "SFX"
+                loi.append(f"{e.id}: không thấy file {kind} {e.asset}")
 
         if isinstance(e, MemeEvent):
             scale = e.scale
@@ -77,21 +78,36 @@ def validate_timeline(timeline: Timeline, *, video_duration: float | None,
 
     meme_events = [event for event in events if isinstance(event, MemeEvent)]
     loi += _kiem_tra_chong_lan(meme_events)
+    loi += _kiem_tra_zoom_chong_nhau([e for e in events if isinstance(e, ZoomEvent)])
     if editing_cfg is not None:
         canh_bao += _kiem_tra_mat_do(meme_events, video_duration, editing_cfg)
     return loi, canh_bao
 
 
+def _vi_tri_hien_thi(e: MemeEvent) -> str:
+    return "tràn màn hình" if e.mode == "cutaway" else (e.position or "")
+
+
 def _kiem_tra_chong_lan(events: list[MemeEvent]) -> list[str]:
-    """Hai meme cùng vị trí mà trùng thời gian sẽ đè lên nhau — không render ra cái gì xem được."""
+    """Hai meme cùng vị trí (hoặc cùng tràn màn hình) mà trùng thời gian sẽ đè lên nhau."""
     loi = []
     for i, a in enumerate(events):
         for b in events[i + 1:]:
             if b.start >= a.end:
                 break  # events đã sắp xếp theo start
-            if (a.position or "") == (b.position or ""):
-                loi.append(f"{a.id} và {b.id} cùng vị trí và trùng thời gian "
+            if _vi_tri_hien_thi(a) == _vi_tri_hien_thi(b):
+                cho = "cùng tràn màn hình" if a.mode == "cutaway" else "cùng vị trí"
+                loi.append(f"{a.id} và {b.id} {cho} và trùng thời gian "
                            f"({format_ts(b.start)} → {format_ts(a.end)})")
+    return loi
+
+
+def _kiem_tra_zoom_chong_nhau(events: list[ZoomEvent]) -> list[str]:
+    loi = []
+    for a, b in zip(events, events[1:], strict=False):
+        if b.start < a.end:
+            loi.append(f"{a.id} và {b.id} là hai zoom trùng thời gian "
+                       f"({format_ts(b.start)} → {format_ts(a.end)})")
     return loi
 
 
@@ -130,14 +146,18 @@ def format_timeline_table(timeline: Timeline, loi: list[str], canh_bao: list[str
             f"{'hiển thị/âm lượng':<20} asset")
     dong += [head, "  " + "-" * (len(head) - 2)]
     for e in events:
-        if isinstance(e, MemeEvent):
+        if isinstance(e, MemeEvent) and e.mode == "cutaway":
+            detail = "tràn màn hình"
+        elif isinstance(e, MemeEvent):
             co = f"{e.scale * 100:.0f}%" if e.scale is not None else "mặc"
             detail = f"{e.position or 'mặc định'} {co}"
+        elif isinstance(e, ZoomEvent):
+            detail = f"zoom {e.factor:.2f}×"
         else:
             detail = f"volume {e.volume:.0%}"
         dong.append(
             f"  {e.id:<12} {e.type:<5} {e.status:<10} {format_ts(e.start):>9} "
-            f"{e.duration:>6.2f}  {detail:<20} {e.asset}"
+            f"{e.duration:>6.2f}  {detail:<20} {e.asset if has_asset(e) else '-'}"
         )
     if not events:
         dong.append("  (chưa có sự kiện nào)")

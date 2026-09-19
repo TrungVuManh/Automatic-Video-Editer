@@ -59,6 +59,8 @@ meme:
   position_default: bottom-right   # top-left | top-right | bottom-left | bottom-right | center
   margin_ratio: 0.03         # lề của meme, tính theo bề rộng video
   max_height_ratio: 0.45     # meme cao tối đa 45% khung — GIF/ảnh khổ dọc không che nửa màn hình
+  exclude_styles: []         # nhãn phong cách không được tự chọn, ví dụ [comparison, dialogue]
+  position_cycle: []         # vị trí luân phiên cho meme góc, ví dụ [top-right, bottom-right]
 
 sfx:
   enabled: true
@@ -77,6 +79,31 @@ ranking:
   novelty_weight: 0.15
   duplicate_penalty: 0.30
   recent_window: 60          # giây — phạt nếu cùng meme vừa được dùng (SPEC §31)
+
+cutaway:
+  # Meme tràn màn hình (cutaway) cho punchline mạnh nhất — kiểu dựng của kênh game chuyên nghiệp.
+  # Mặc định chỉ render khi bạn chọn "Tràn màn hình" trong web; profile `pro` bật tự động.
+  mode: never                # never | auto — builder có tự chọn cú cắt tràn màn hình không
+  max_per_minute: 2
+  cooldown: 15               # giây giữa hai cú cắt (tính từ lúc bắt đầu)
+  min_confidence: 0.8        # chỉ khoảnh khắc AI tự tin nhất mới được cắt tràn màn hình
+  duration_min: 0.8
+  duration_max: 1.3
+  sfx_on_cut: true           # mỗi cú cắt kèm một SFX
+  sfx_query: impact          # truy vấn SFX khi AI không đề xuất âm nào
+  punch_zoom: true           # zoom vào gameplay ngay trước cú cắt
+  zoom_factor: 1.1
+  zoom_duration: 0.3
+  inset: 0.92                # meme chiếm tối đa 92% khung, chừa viền nền mờ
+  blur: 24                   # nền = chính meme phóng lấp khung, làm mờ
+  darken: -0.18              # làm tối nền để meme nổi lên
+  settle_zoom: 1.06          # vào khung ở 106% rồi thu về 100%
+  settle_time: 0.15
+  fade_in: 0.06
+  fade_out: 0.08
+  duck_volume: 0.35          # tiếng gốc còn 35% trong lúc cắt
+  duck_ramp: 0.08
+  limiter: 0.891             # chặn đỉnh ≈ −1 dBFS sau khi trộn SFX
 
 download:
   # Tải video YouTube bằng yt-dlp: `automeme download <link>` hoặc `automeme run <link>`.
