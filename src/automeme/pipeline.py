@@ -25,9 +25,14 @@ from .timeline.builder import build_timeline
 from .timeline.schema import Timeline, has_asset, load_timeline, save_timeline
 from .timeline.validator import resolve_asset, validate_timeline
 from .transcription.base import Transcriber
-from .transcription.normalize import normalize_transcript, validate_transcript
+from .transcription.normalize import (
+    drop_hallucinations,
+    normalize_transcript,
+    validate_transcript,
+)
 from .utils.files import PROMPTS_DIR, read_json, write_json
 from .utils.logger import log
+from .utils.timestamps import format_ts
 from .workspace import paths_for, video_fingerprint
 
 
@@ -63,6 +68,16 @@ def transcribe_video(video: Path, settings: Settings, *, force: bool = False,
                                     duration=thong_tin.duration)
         write_json(paths.transcript_cache, data)
 
+    if settings.whisper.drop_hallucinations:
+        data, bo = drop_hallucinations(
+            data,
+            phrases=settings.whisper.hallucination_phrases,
+            max_words_per_second=settings.whisper.max_words_per_second,
+            no_speech_threshold=settings.whisper.no_speech_threshold,
+        )
+        for seg in bo:
+            log.info("Bỏ câu Whisper nhiều khả năng bịa [%s → %s]: %s",
+                     format_ts(seg["start"]), format_ts(seg["end"]), seg["text"])
     for canh_bao in validate_transcript(data):
         log.warning("Transcript: %s", canh_bao)
     write_json(paths.transcript, data)
@@ -349,6 +364,7 @@ def _analysis_input_key(video: Path, transcript: Path, prompt: Path, settings: S
         "analyzer": settings.analyzer.model_dump(mode="json"),
         "editing": settings.editing.model_dump(mode="json"),
         "duration": [settings.meme.duration_min, settings.meme.duration_max],
+        **({"effort": settings.claude.effort} if backend == "claude" else {}),
     })
 
 

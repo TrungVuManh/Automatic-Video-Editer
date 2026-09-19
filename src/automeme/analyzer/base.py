@@ -5,6 +5,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
+class LLMRefusal(RuntimeError):
+    """LLM từ chối trả lời một đoạn (ví dụ bộ lọc an toàn) — bỏ riêng đoạn đó, chạy tiếp."""
+
+
 class StructuredLLM(ABC):
     """Backend nhận prompt + JSON Schema và trả về chuỗi JSON."""
 

@@ -13,6 +13,9 @@ Toàn bộ là hàm thuần, không đụng tới file. Schema (SPEC §17, thêm
 """
 from __future__ import annotations
 
+import unicodedata
+from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +44,12 @@ def normalize_transcript(raw: dict[str, Any], *, video_name: str, model: str,
         start, end = _so(seg.get("start")), _so(seg.get("end"))
         if not text or start is None or end is None or end <= start:
             continue
-        segments.append({"id": 0, "start": round(start, 2), "end": round(end, 2), "text": text})
+        doan: dict[str, Any] = {"id": 0, "start": round(start, 2), "end": round(end, 2),
+                                "text": text}
+        for khoa in ("no_speech_prob", "avg_logprob"):
+            if isinstance(seg.get(khoa), int | float):
+                doan[khoa] = round(float(seg[khoa]), 3)
+        segments.append(doan)
         for w in seg.get("words") or []:
             tu = clean_text(w.get("w"))
             ws, we = _so(w.get("start")), _so(w.get("end"))
@@ -66,6 +74,50 @@ def normalize_transcript(raw: dict[str, Any], *, video_name: str, model: str,
         "segments": segments,
         "words": words,
     }
+
+
+def drop_hallucinations(data: dict[str, Any], *, phrases: Sequence[str],
+                        max_words_per_second: float, no_speech_threshold: float,
+                        ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Bỏ câu Whisper bịa ra ở đoạn im lặng/nhạc. Trả (transcript mới, các câu bị bỏ).
+
+    Hai dấu hiệu:
+    - **Nói nhanh vô lý**: từ 4 từ trở lên mà quá `max_words_per_second` từ/giây. Lỗi thật trên
+      livestream: "Cảm ơn các bạn đã theo dõi và hẹn gặp lại." (10 từ) nằm gọn trong 0,04 giây.
+    - **Câu quen thuộc** (`phrases`, như lời chào cuối video, "subscribe cho kênh…") kèm một dấu
+      hiệu nữa: nhanh hơn nửa ngưỡng trên, Whisper tự báo `no_speech_prob` ≥ ngưỡng, hoặc cùng câu
+      lặp lại ≥ 2 lần (gợi ý từ vựng sai làm Whisper bịa "Hãy subscribe cho kênh…" cho cả đoạn).
+      Chỉ khớp câu quen thuộc thì giữ — streamer có thể nói thật câu đó.
+    Từ (`words`) nằm trong câu bị bỏ cũng bị bỏ. Hàm thuần, không sửa đầu vào.
+    """
+    mau = [_chuan_hoa(p) for p in phrases if p.strip()]
+    so_lan = Counter(_chuan_hoa(s["text"]) for s in data.get("segments") or [])
+    giu: list[dict[str, Any]] = []
+    bo: list[dict[str, Any]] = []
+    for seg in data.get("segments") or []:
+        so_tu = len(seg["text"].split())
+        toc_do = so_tu / max(seg["end"] - seg["start"], 1e-3)
+        chu = _chuan_hoa(seg["text"])
+        quen = any(m in chu for m in mau)
+        im_lang = (seg.get("no_speech_prob") or 0) >= no_speech_threshold
+        if (so_tu >= 4 and toc_do > max_words_per_second) or (
+                quen and (toc_do > max_words_per_second / 2 or im_lang or so_lan[chu] >= 2)):
+            bo.append(seg)
+        else:
+            giu.append(dict(seg))
+    if not bo:
+        return data, []
+    for i, seg in enumerate(giu):
+        seg["id"] = i
+    words = [w for w in data.get("words") or []
+             if not any(s["start"] <= w["start"] <= s["end"] for s in bo)]
+    return {**data, "segments": giu, "words": words}, bo
+
+
+def _chuan_hoa(text: str) -> str:
+    """Chữ thường, bỏ dấu câu, gộp khoảng trắng — để so câu quen thuộc (vẫn giữ dấu thanh)."""
+    text = unicodedata.normalize("NFC", text.casefold())
+    return " ".join("".join(c if c.isalnum() else " " for c in text).split())
 
 
 def validate_transcript(data: dict[str, Any]) -> list[str]:

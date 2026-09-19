@@ -76,3 +76,24 @@ def test_doi_model_thi_doi_file_cache_nhung_giu_thu_muc(tmp_path):
     assert a.cache_dir == b.cache_dir
     assert a.audio == b.audio                      # audio không phụ thuộc model
     assert a.transcript_cache != b.transcript_cache
+
+
+def test_goi_y_tu_vung_whisper_doi_khoa_cache_nhung_khong_dat_thi_giu_khoa_cu(tmp_path):
+    from automeme.workspace import hotwords_text
+
+    goc = load_settings(env={}, root=tmp_path)
+    goi_y = tmp_path / "prompts" / "goi_y.txt"
+    goi_y.parent.mkdir()
+    goi_y.write_text("# chú thích bị bỏ\nChào anh em, livestream.\n\nlike, share\n",
+                     encoding="utf-8")
+    co = load_settings(env={"WHISPER_HOTWORDS_FILE": "prompts/goi_y.txt"}, root=tmp_path)
+    assert co.whisper.hotwords_file == goi_y  # đường dẫn tương đối tính từ gốc dự án
+    assert hotwords_text(co.whisper) == "Chào anh em, livestream. like, share"
+    assert hotwords_text(goc.whisper) == ""
+    assert asr_key(co.whisper) != asr_key(goc.whisper)
+    truoc = asr_key(co.whisper)
+    goi_y.write_text("nội dung khác", encoding="utf-8")
+    assert asr_key(co.whisper) != truoc  # sửa nội dung gợi ý → phải nhận dạng lại
+    goi_y.unlink()
+    with pytest.raises(FileNotFoundError, match="gợi ý từ vựng"):
+        asr_key(co.whisper)

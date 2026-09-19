@@ -383,3 +383,24 @@ def test_run_video_tich_hop_that_voi_backend_gia(tmp_path):
     assert probe(output).has_audio
     paths = paths_for(video, settings)
     assert paths.transcript.exists() and paths.analysis.exists() and paths.timeline.exists()
+
+
+def test_loc_cau_bia_ap_dung_ca_voi_transcript_da_cache(video_gia, settings, caplog):
+    """Cache giữ nguyên kết quả Whisper; bản chính thức bỏ câu bịa — đổi ngưỡng lọc không phải
+    nhận dạng lại."""
+    raw = {"language": "vi", "duration": 2.0, "segments": [
+        *RAW["segments"],
+        {"start": 1.9, "end": 1.94, "text": "Cảm ơn các bạn đã theo dõi và hẹn gặp lại.",
+         "words": [{"w": "và", "start": 1.9, "end": 1.94}]},
+    ]}
+    t = TranscriberGia(raw)
+    with caplog.at_level("INFO", logger="automeme"):
+        _, data = transcribe_video(video_gia, settings, transcriber=t)
+    assert [s["text"] for s in data["segments"]] == [RAW["segments"][0]["text"]]
+    assert "Bỏ câu Whisper" in caplog.text
+    assert len(read_json(paths_for(video_gia, settings).transcript_cache)["segments"]) == 2
+
+    tat = settings.model_copy(update={
+        "whisper": settings.whisper.model_copy(update={"drop_hallucinations": False})})
+    _, data = transcribe_video(video_gia, tat, transcriber=t)
+    assert len(data["segments"]) == 2 and t.so_lan == 1  # dùng lại cache, không nhận dạng lại

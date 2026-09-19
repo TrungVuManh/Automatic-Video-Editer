@@ -166,26 +166,51 @@ def test_ollama_adapter_gui_schema_va_tat_thinking():
     assert captured["chat"]["think"] is False
 
 
-def test_claude_adapter_gui_structured_output():
-    captured = {}
-
+def _claude_gia(response, captured):
     class Messages:
         def create(self, **kwargs):
             captured.update(kwargs)
-            return SimpleNamespace(content=[SimpleNamespace(type="text", text='{"ok": true}')])
+            return response
 
-    def factory():
-        return SimpleNamespace(messages=Messages())
+    def factory(**kwargs):
+        captured["init"] = kwargs
+        return SimpleNamespace(beta=SimpleNamespace(messages=Messages()))
 
-    result = ClaudeLLM("claude-test", client_factory=factory).complete("p", {"x": 1})
-    assert json.loads(result) == {"ok": True}
-    assert captured["output_config"]["format"]["schema"] == {"x": 1}
+    return factory
 
 
-def test_create_llm_theo_config():
+def test_claude_adapter_gui_structured_output_effort_va_fallback():
+    captured = {}
+    ok = SimpleNamespace(stop_reason="end_turn",
+                         content=[SimpleNamespace(type="text", text='{"ok": true}')])
+    llm = ClaudeLLM("claude-test", client_factory=_claude_gia(ok, captured), api_key="sk-gia")
+    assert json.loads(llm.complete("p", {"x": 1})) == {"ok": True}
+    assert captured["output_config"] == {
+        "format": {"type": "json_schema", "schema": {"x": 1}}, "effort": "low"}
+    # Opus 5 có thể từ chối → API tự chạy lại trên model dự phòng
+    assert captured["fallbacks"] == "default"
+    assert captured["betas"] == ["server-side-fallback-2026-07-01"]
+    assert captured["max_tokens"] == 16000  # đủ chỗ cho phần suy nghĩ, không cắt cụt JSON
+    assert captured["init"] == {"api_key": "sk-gia"}  # key từ .env được truyền tường minh
+
+
+def test_claude_tu_choi_thi_bao_loi_rieng():
+    from automeme.analyzer.base import LLMRefusal
+
+    tu_choi = SimpleNamespace(stop_reason="refusal", content=[],
+                              stop_details=SimpleNamespace(category="cyber"))
+    llm = ClaudeLLM("claude-test", client_factory=_claude_gia(tu_choi, {}))
+    with pytest.raises(LLMRefusal, match="cyber"):
+        llm.complete("p", {"x": 1})
+
+
+def test_create_llm_theo_config(monkeypatch):
     assert isinstance(create_llm(load_settings(env={})), OllamaLLM)
-    settings = load_settings(env={"LLM_BACKEND": "claude"})
-    assert isinstance(create_llm(settings), ClaudeLLM)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-tu-env")
+    settings = load_settings(env={"LLM_BACKEND": "claude", "CLAUDE_EFFORT": "medium"})
+    llm = create_llm(settings)
+    assert isinstance(llm, ClaudeLLM) and llm.model == "claude-opus-5"
+    assert llm.effort == "medium" and llm.api_key == "sk-tu-env"
 
 
 def test_timing_lam_tron_khong_de_sai_so_float():
@@ -274,3 +299,21 @@ def test_khong_chen_meme_ma_duration_0_van_hop_le():
         MemeOpportunity.model_validate({**base, "insert_meme": True, "trigger": "x",
                                         "reason": "x", "emotion": "x", "reaction_type": "x",
                                         "search_query": "x"})
+
+
+def test_llm_tu_choi_mot_doan_thi_bo_rieng_doan_do_khong_thu_lai(caplog):
+    from automeme.analyzer.base import LLMRefusal
+
+    class TuChoiDoanDau(FakeLLM):
+        def complete(self, prompt, schema):
+            self.calls += 1
+            if self.calls == 1:
+                raise LLMRefusal("Claude từ chối trả lời (loại: cyber)")
+            return opportunity(1).model_dump_json()
+
+    contexts = [ContextWindow(0, 0, 1, (), "A", ()), ContextWindow(1, 1, 2, (), "B", ())]
+    llm = TuChoiDoanDau([])
+    with caplog.at_level("WARNING", logger="automeme"):
+        found = detect_opportunities(contexts, llm, "{{CONTEXT_JSON}} schema {{SCHEMA_JSON}}")
+    assert [item.segment_id for item in found] == [1] and llm.calls == 2
+    assert "từ chối" in caplog.text and "JSON sai" not in caplog.text

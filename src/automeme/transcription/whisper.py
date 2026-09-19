@@ -30,12 +30,20 @@ class FasterWhisperTranscriber(Transcriber):
         cfg = self.cfg
         model = self._load()
         log.info("Nhận dạng %s (ngôn ngữ %s)...", audio.name, cfg.language)
+        from ..workspace import hotwords_text
+
+        goi_y = hotwords_text(cfg) or None
+        if goi_y:
+            log.info("Gợi ý từ vựng cho Whisper: %s", cfg.hotwords_file)
         segments, info = model.transcribe(
             str(audio),
             language=cfg.language,
             beam_size=cfg.beam_size,
             vad_filter=cfg.vad_filter,
             condition_on_previous_text=cfg.condition_on_previous_text,
+            # hotwords đi vào mọi cửa sổ; initial_prompt chỉ tác động 30 giây đầu khi
+            # condition_on_previous_text=false (xem faster_whisper/transcribe.py)
+            hotwords=goi_y,
             word_timestamps=True,
         )
         tong = float(getattr(info, "duration", 0.0) or 0.0)
@@ -47,6 +55,9 @@ class FasterWhisperTranscriber(Transcriber):
                 "start": seg.start,
                 "end": seg.end,
                 "text": seg.text,
+                # để lọc câu bịa ở đoạn im lặng (normalize.drop_hallucinations)
+                "no_speech_prob": getattr(seg, "no_speech_prob", None),
+                "avg_logprob": getattr(seg, "avg_logprob", None),
                 "words": [{"w": w.word, "start": w.start, "end": w.end}
                           for w in (seg.words or [])],
             })

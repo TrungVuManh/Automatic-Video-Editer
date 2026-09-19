@@ -115,7 +115,7 @@ commit `.env`** (đã có trong `.gitignore`).
 | Lệnh `analyze` | SDK + Ollama + model | `python -m pip install -e ".[llm]"`; `winget install Ollama.Ollama`; rồi `ollama pull qwen3:8b` |
 | Lệnh `run` | Thư viện meme của bạn | chép file vào `assets/` — xem [5.3](#53-thư-viện-meme) |
 | Tùy chọn | Docker Desktop (cho Meme Search) | `winget install Docker.DockerDesktop` |
-| Tùy chọn | Claude thay cho Ollama | `python -m pip install -e ".[claude]"`, đặt `LLM_BACKEND=claude` và `ANTHROPIC_API_KEY` trong `.env` |
+| Tùy chọn | Claude thay cho Ollama (tốn phí, xem mục 4.2) | `python -m pip install -e ".[claude]"`, đặt `LLM_BACKEND=claude` và `ANTHROPIC_API_KEY` trong `.env` |
 
 Kiểm tra Ollama sau khi cài:
 
@@ -193,7 +193,9 @@ nằm trong `configs/default.yaml`.
 | `WHISPER_BEAM_SIZE` | `5` | Giảm để nhanh hơn |
 | `WHISPER_VAD_FILTER` | `true` | Đặt `false` khi giọng nói nhỏ và bị cắt mất câu |
 | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | `false` | Đặt `true` nếu muốn Whisper dùng câu trước làm ngữ cảnh (chính xác hơn một chút nhưng dễ lặp chữ) |
+| `WHISPER_HOTWORDS_FILE` | (trống) | File gợi ý cách viết cho Whisper, ví dụ `prompts/whisper_livestream_vi.txt` — xem ghi chú bên dưới trước khi dùng |
 | `LLM_BACKEND` | `ollama` | `claude` để dùng Claude API |
+| `CLAUDE_MODEL`, `CLAUDE_EFFORT` | `claude-opus-5`, `low` | Model và mức suy nghĩ khi `LLM_BACKEND=claude` |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama chạy ở máy khác |
 | `OLLAMA_MODEL` | `qwen3:8b` | GPU dưới 8 GB VRAM: `qwen3:4b`. `qwen3:14b` chạy được trên GPU 8 GB (tràn một phần sang RAM) nhưng xem ghi chú bên dưới |
 | `MEME_TIMING_DELAY` | `0.15` | Độ trễ từ cuối câu đến lúc meme bắt đầu; thường giữ 0.10–0.30 giây |
@@ -217,6 +219,24 @@ nằm trong `configs/default.yaml`.
 > không lỗi JSON, nhưng chọn trúng ít khoảnh khắc hay hơn `qwen3:8b` (3/6 so với 5/6 điểm) và
 > hiểu lầm một lỗi nhận dạng giọng nói. Giới hạn chính nằm ở transcript (sai từ lóng, không dấu
 > câu, không thấy hình), không phải cỡ model. Nên giữ `qwen3:8b`.
+>
+> **Lọc câu Whisper bịa.** Ở đoạn im lặng/nhạc, Whisper hay "bịa" câu quen thuộc như "Cảm ơn
+> các bạn đã theo dõi và hẹn gặp lại." Câu bị bỏ khỏi transcript khi nói nhanh vô lý (quá
+> `whisper.max_words_per_second`, mặc định 10 từ/giây), hoặc là câu trong
+> `whisper.hallucination_phrases` kèm dấu hiệu im lặng/lặp lại. Log ghi rõ từng câu bị bỏ; tắt
+> bằng `whisper.drop_hallucinations: false`. Bộ lọc chạy sau cache nên đổi cấu hình không phải
+> nhận dạng lại.
+>
+> **Gợi ý cách viết cho Whisper** (`WHISPER_HOTWORDS_FILE`) — thử nghiệm, mặc định tắt. File mẫu
+> chỉ có một câu hội thoại ngắn có dấu câu; trên livestream nó giảm lỗi từ 32% xuống 29% và thêm
+> dấu câu, nhưng không làm AI chọn meme tốt hơn. **Đừng** đưa "like, share, subscribe, donate,
+> chào các bạn" vào gợi ý: Whisper chuyển sang bịa lời kết video cho cả đoạn (đã gặp).
+>
+> **Dùng Claude thay Ollama:** thêm vào `.env` hai dòng `LLM_BACKEND=claude` và
+> `ANTHROPIC_API_KEY=<key của bạn>` (key tạo ở console.anthropic.com; không dán key vào chat
+> hay commit). Mặc định `claude-opus-5` với `CLAUDE_EFFORT=low`; một đoạn 90 giây (~27 câu) tốn
+> khoảng 0,6 USD — `CLAUDE_MODEL=claude-sonnet-5` rẻ hơn (~0,25 USD). Khi Claude từ chối một câu,
+> API tự chạy lại trên model dự phòng; vẫn bị từ chối thì chỉ câu đó bị bỏ.
 >
 > Muốn thử model khác mà ổ C đầy: đặt thư mục model của Ollama sang ổ khác trước khi tải —
 > biến môi trường người dùng `OLLAMA_MODELS=D:\OllamaModels`, chuyển thư mục

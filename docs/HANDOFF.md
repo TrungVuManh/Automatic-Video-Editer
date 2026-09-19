@@ -136,7 +136,7 @@ thì lấy `meme.position_default` / `meme.scale_default` trong cấu hình. Đ�
 | Chất lượng `search_query` của qwen3:8b | Ra dạng từ khóa ("ngượng bất ngờ tiết lộ") vì prompt cố ý hướng về taxonomy cho tìm kiếm chữ; `trigger` ghi nhãn ("reveal") thay vì câu thoại như SPEC §20 |
 | Quyền sử dụng media trong kho local | Đã cài 100 template UGC có nguồn/cảnh báo; người dùng vẫn phải tự xác minh quyền trước khi xuất bản, nhất là thương mại |
 | Tải video cần đăng nhập (riêng tư, giới hạn tuổi, hội viên) | Chưa hỗ trợ cookie — báo lỗi rõ |
-| **Chọn câu đùa còn yếu** | qwen3:8b cho mọi đề xuất 0,85 → thứ tự cú cắt dựa vào luật phụ. Đã thử qwen3:14b (phiên 16): điểm có phân biệt nhưng chọn kém hơn (3/6 vs 5/6) và chậm 2,6× → **giữ 8b**. Giới hạn chính là transcript (sai từ lóng, không dấu câu, không thấy hình). Hướng tiếp: Claude qua `LLM_BACKEND=claude` (tốn phí), cải thiện transcript, lọc câu Whisper bịa |
+| **Chọn câu đùa còn yếu (đã thử 4 cách)** | qwen3:8b cho mọi đề xuất 0,85 → thứ tự cú cắt dựa vào luật phụ. Đã thử qwen3:14b (phiên 16): điểm có phân biệt nhưng chọn kém hơn (3/6 vs 5/6) và chậm 2,6× → **giữ 8b**. Giới hạn chính là transcript (sai từ lóng, không dấu câu, không thấy hình). Phiên 17: transcript tốt hơn (gợi ý Whisper, phụ đề YouTube) cũng không cải thiện với 8b. Còn chờ: chạy Claude (cần người dùng thêm `ANTHROPIC_API_KEY` vào `.env`) |
 | **Một số template vẫn có vùng chữ trống** | Đã loại 12 nhãn phong cách cần chữ (profile `pro`), nhưng ảnh như Monkey Puppet vẫn có dải trắng phía trên. Cần gắn nhãn thủ công trong kho hoặc cắt dải trắng |
 | Nhận dạng từ mượn tiếng Anh / từ lóng | "live được hai nền tảng" → "lấy lại được hai nền tảng"; "đổi gió" → "đổi giống như". Có thể thử `initial_prompt` (từ vựng stream + dấu câu) |
 | Caption, zoom độc lập (không đi kèm cú cắt) | SPEC §71–73 — `cutaway`, `sfx`, `zoom` đã có; caption và zoom theo nhịp gameplay chưa làm |
@@ -150,7 +150,7 @@ cờ CLI. Tên biến môi trường theo SPEC §14, danh sách đầy đủ tro
 
 ### Test
 
-`pytest -q` — **425 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
+`pytest -q` — **434 test**, chạy không cần GPU, Ollama, faster-whisper, API key hay mạng. Các test cần FFmpeg (tách audio,
 render thật, kiểm tra meme hiện đúng lúc bằng cách so khung hình) tự bỏ qua nếu máy không có
 FFmpeg; CI có cài nên chạy cả chúng. CI (GitHub Actions) chạy `ruff check src tests` + `pytest -q` mỗi lần push lên
 https://github.com/TrungVuManh/Automatic-Video-Editer (remote `origin`, nhánh `main`).
@@ -413,8 +413,9 @@ web để tự quyết định meme"):
 ### Tiếp theo
 
 Đã nghiệm thu với Ollama + kho meme thật (2026-09-17) và dựng kiểu `pro` trên livestream
-(2026-09-19). Còn: chọn câu đùa tốt hơn (qwen3:14b đã thử, không tốt hơn — thử Claude hoặc
-cải thiện transcript; lọc câu Whisper bịa như "Cảm ơn các bạn đã theo dõi…");
+(2026-09-19). Còn: chọn câu đùa tốt hơn (qwen3:14b, gợi ý Whisper và phụ đề YouTube đã thử —
+không tốt hơn; còn Claude, chờ key); thêm nhiều đoạn video để đánh giá chắc hơn (một đoạn 90 s
+quá nhỏ);
 cải thiện chọn meme khi không có Meme Search (tìm kiếm chữ không hiểu đồng nghĩa); caption và
 zoom theo nhịp gameplay; kiểm tra thêm media meme dạng video.
 Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke → `CaptionEvent`),
@@ -489,6 +490,10 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 - [x] Meme tràn màn hình + zoom trước cú cắt + SFX khi cắt + giảm tiếng gốc + limiter (profile `pro`)
 - [x] Tách đoạn Whisper dài theo khoảng lặng; thang điểm confidence trong prompt
 - [x] Web: đổi góc/tràn màn hình, gợi ý meme thay thế có tìm kiếm, chèn meme tại playhead, chỉnh zoom
+- [x] Lọc câu Whisper bịa (nói nhanh vô lý / câu quen thuộc + im lặng/lặp lại), chạy sau cache
+- [x] Gợi ý cách viết cho Whisper (`whisper.hotwords_file`, tùy chọn, mặc định tắt)
+- [x] Adapter Claude chạy được thật: key từ `.env`, `claude-opus-5` + effort, fallback khi từ chối
+- [~] So sánh Claude với qwen3:8b — chờ người dùng thêm `ANTHROPIC_API_KEY`
 
 ---
 
@@ -508,6 +513,55 @@ Code tái dùng được trong `legacy/`: `subtitles.py` (phụ đề karaoke �
 
 > Claude Code: thêm một mục sau mỗi phiên — đã làm gì, quyết định gì, vấn đề còn tồn tại.
 > Mới nhất ở trên cùng. Nhật ký giai đoạn stream-auto-editor: `legacy/stream_editor/HANDOFF.md`.
+
+### 2026-09-19 (phiên 17) — Lọc câu bịa, gợi ý Whisper, chuẩn bị Claude (Claude Code)
+
+**Yêu cầu.** "Hãy thử hết" 3 hướng: lọc câu Whisper bịa, thử Claude, cải thiện transcript.
+
+**1. Lọc câu bịa — xong, bật mặc định.** `normalize.drop_hallucinations` (hàm thuần) chạy trong
+`transcribe_video` *sau* cache: cache giữ nguyên kết quả Whisper, bản `data/transcripts` bỏ câu
+bịa, đổi ngưỡng không phải nhận dạng lại. Dấu hiệu: ≥ 4 từ mà > 10 từ/giây; hoặc câu quen thuộc
+(`whisper.hallucination_phrases`) kèm nói nhanh > 5 từ/giây, `no_speech_prob` ≥ 0,6 (whisper.py
+giờ lưu giá trị này) hoặc lặp ≥ 2 lần. Trên livestream: bỏ đúng câu "Cảm ơn các bạn đã theo dõi
+và hẹn gặp lại." (10 từ trong 0,04 s).
+
+**2. Gợi ý Whisper — có tính năng, mặc định tắt.** `whisper.hotwords_file` → faster-whisper
+`hotwords` (đọc mã nguồn 1.2.1: với `condition_on_previous_text=false`, `initial_prompt` chỉ tác
+động 30 s đầu, `hotwords` vào mọi cửa sổ). Nội dung gợi ý nằm trong khóa cache ASR; không đặt thì
+khóa giữ như cũ (`9209deca`). Đo bằng tỉ lệ lỗi từ (WER) so với phụ đề tự động YouTube của cùng
+đoạn (tải ở phiên 13; đúng hơn rõ ở từ lóng: "đổi gió", "cầu chì", "live"):
+
+| Gợi ý | WER | Dấu câu | Ghi chú |
+|---|---|---|---|
+| (không) | 32,1% | 0 | |
+| A: "Chào anh em… like, share, donate…" | 98,4% | 0 | cả 90 s thành "Hãy subscribe cho kênh lalaschool…" ×3 |
+| B: "Ừ, thế à? Được rồi, đi thôi anh em!" | **28,9%** | 42 | không chép lại câu gợi ý |
+| C: danh sách "live, stream, game…" | 73,6% | 5 | mất nửa nội dung |
+
+File mẫu `prompts/whisper_livestream_vi.txt` dùng B, kèm cảnh báo về A/C. Bộ lọc câu bịa thêm
+"lalaschool", "không bỏ lỡ những video hấp dẫn" và dấu hiệu lặp lại — giờ bỏ hết 3 câu của A.
+
+**Tác động lên chọn meme (qwen3:8b, profile pro, chấm theo đáp án phiên 16):** gốc 5/6 (thừa 1);
+B 3/6 (thừa 2); **phụ đề YouTube** 3/6 (thừa 2 — một chỗ ở 37,1 s là phản ứng "Úi giời ơi. Một
+cầu chì" đúng ý nhưng lệch khung dung sai 2 s). Kết luận: với 8b, transcript tốt hơn **không**
+cho kết quả tốt hơn đo được; chênh lệch nằm trong nhiễu của một mẫu 90 s. Phụ đề YouTube có sẵn
+cho video tải về từ YouTube — đáng cân nhắc làm nguồn transcript khi dùng model mạnh hơn.
+
+**3. Claude — adapter sửa xong, chưa chạy thật.** Máy không có `ANTHROPIC_API_KEY` và không có
+CLI `ant`. Sửa theo skill claude-api: (a) **lỗi thật**: `.env` chỉ được đọc vào cấu hình, không
+vào biến môi trường, nên key trong `.env` không tới SDK → `create_llm` truyền `api_key` tường
+minh; (b) mặc định `claude-opus-5` + `claude.effort: low`, `analyzer.max_tokens` 1024 → 16000
+(Opus 5 bật suy nghĩ mặc định, 1024 dễ cắt cụt JSON); (c) `client.beta.messages.create` với
+`fallbacks="default"` (beta `server-side-fallback-2026-07-01`) để khi bị từ chối API tự chạy lại
+trên model dự phòng; (d) kiểm tra `stop_reason`: vẫn từ chối → `LLMRefusal`, detector bỏ riêng
+câu đó. Effort nằm trong khóa cache phân tích (chỉ khi backend claude). Ước tính: ~27 câu ×
+~2k token vào → Opus 5 ≈ 0,6 USD / đoạn 90 s, Sonnet 5 ≈ 0,25 USD.
+
+**Dọn dẹp.** Dữ liệu đoạn livestream đã chạy lại với cấu hình mặc định (8b, không gợi ý, có
+lọc câu bịa): vẫn 5/6. Bài học: tắt `ollama.exe serve` bằng `Stop-Process` **không** tắt tiến
+trình con `llama-server.exe` — tiến trình 14b ở phiên 16 còn sót tới phiên này; luôn kiểm tra
+và tắt cả `llama-server.exe`.
+425 → **434 test**, ruff sạch.
 
 ### 2026-09-19 (phiên 16) — Thử model lớn hơn: qwen3:14b (Claude Code)
 

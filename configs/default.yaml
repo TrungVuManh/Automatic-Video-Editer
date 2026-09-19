@@ -23,6 +23,26 @@ whisper:
   # Whisper mặc định lấy câu trước làm ngữ cảnh cho câu sau; gặp nhạc hoặc im lặng thì dễ
   # lặp một câu mãi. Tắt đi thì mỗi đoạn độc lập, an toàn hơn với video ngắn.
   condition_on_previous_text: false
+  # Gợi ý từ vựng + cách viết có dấu câu cho Whisper, ví dụ prompts/whisper_livestream_vi.txt.
+  # Để trống (null) = không gợi ý. Đổi file thì Whisper nhận dạng lại (khóa cache đổi).
+  hotwords_file: null
+  # Whisper hay "bịa" câu quen thuộc ở đoạn im lặng/nhạc. Câu bị bỏ khi nói nhanh vô lý, hoặc là
+  # câu quen thuộc dưới đây kèm dấu hiệu im lặng. Áp dụng cả cho transcript đã cache.
+  drop_hallucinations: true
+  max_words_per_second: 10   # tiếng Việt nói nhanh cỡ 6–7 từ/giây
+  no_speech_threshold: 0.6   # Whisper tự báo xác suất "không có tiếng nói"
+  hallucination_phrases:
+    - cảm ơn các bạn đã theo dõi
+    - cảm ơn các bạn đã xem
+    - hẹn gặp lại các bạn
+    - đăng ký kênh
+    - subscribe cho kênh
+    - ghiền mì gõ
+    - la la school
+    - lalaschool
+    - không bỏ lỡ những video hấp dẫn
+    - thanks for watching
+    - subtitles by
 
 llm:
   backend: ollama            # ollama (local, mặc định) | claude (cần ANTHROPIC_API_KEY)
@@ -32,13 +52,14 @@ ollama:
   model: qwen3:8b            # máy yếu hơn: qwen3:4b; qwen3:14b chậm ~2,6× mà không tốt hơn (HANDOFF phiên 16)
 
 claude:
-  model: claude-sonnet-5
+  model: claude-opus-5
+  effort: low                # low | medium | high | xhigh | max — chọn meme từng câu nên low là đủ
 
 analyzer:
   previous_segments: 2       # số câu trước CURRENT trong context window (SPEC §18)
   next_segments: 1           # số câu sau CURRENT
   timing_delay: 0.15         # meme bắt đầu sau cuối câu 150 ms (SPEC §52)
-  max_tokens: 1024           # giới hạn output khi dùng Claude
+  max_tokens: 16000          # trần output khi dùng Claude (gồm phần suy nghĩ); chỉ tính tiền phần thực sinh ra
   split_long_segments: true  # tách đoạn Whisper dài theo khoảng lặng giữa các từ → meme bám đúng câu
   max_segment_seconds: 4.0   # đoạn dài hơn chừng này thì tách
   split_pause: 0.3           # khoảng lặng giữa hai từ (giây) được coi là ranh giới câu

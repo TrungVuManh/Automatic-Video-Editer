@@ -1,0 +1,6 @@
+# Gợi ý cho Whisper khi nhận dạng livestream tiếng Việt (whisper.hotwords_file) — TÙY CHỌN.
+# Chỉ một câu hội thoại ngắn có dấu câu: Whisper học cách chấm câu và viết số theo nó.
+# Đã đo trên livestream (HANDOFF phiên 17): câu này giảm lỗi từ 32% → 29% và thêm dấu câu.
+# ĐỪNG thêm "like, share, subscribe, donate, chào các bạn…": Whisper chuyển sang bịa lời kết
+# video YouTube ("Hãy subscribe cho kênh…") cho cả đoạn. Danh sách từ rời cũng làm mất nửa nội dung.
+Ừ, thế à? Được rồi, đi thôi anh em!

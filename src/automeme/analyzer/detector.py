@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from ..utils.logger import log
-from .base import StructuredLLM
+from .base import LLMRefusal, StructuredLLM
 from .context import ContextWindow
 from .prompt import render_prompt
 from .schema import MemeOpportunity, MemeTiming
@@ -31,6 +31,7 @@ def detect_opportunities(contexts: list[ContextWindow], llm: StructuredLLM,
     for index, context in enumerate(contexts, 1):
         prompt = render_prompt(prompt_template, context, schema)
         candidate = None
+        tu_choi = False
         for attempt in range(2):
             attempt_prompt = prompt
             if attempt:
@@ -38,7 +39,12 @@ def detect_opportunities(contexts: list[ContextWindow], llm: StructuredLLM,
                     "\n\nLần trả lời trước không hợp lệ. Hãy sửa và chỉ trả đúng một JSON object "
                     "khớp hoàn toàn schema."
                 )
-            raw = llm.complete(attempt_prompt, schema)
+            try:
+                raw = llm.complete(attempt_prompt, schema)
+            except LLMRefusal as e:
+                log.warning("Bỏ đoạn %s: %s", context.segment_id, e)
+                tu_choi = True
+                break
             try:
                 candidate = MemeOpportunity.model_validate_json(raw)
                 if candidate.segment_id != context.segment_id:
@@ -52,7 +58,8 @@ def detect_opportunities(contexts: list[ContextWindow], llm: StructuredLLM,
                 level("LLM trả JSON sai cho đoạn %s (lần %d/2): %s",
                       context.segment_id, attempt + 1, e)
         if candidate is None:
-            log.warning("Bỏ đoạn %s vì LLM trả JSON sai hai lần.", context.segment_id)
+            if not tu_choi:
+                log.warning("Bỏ đoạn %s vì LLM trả JSON sai hai lần.", context.segment_id)
             continue
         opportunities.append(candidate)
         log.info("Phân tích LLM: %d/%d đoạn", index, len(contexts))

@@ -54,6 +54,15 @@ class WhisperSettings(_Section):
     beam_size: int = Field(ge=1)
     vad_filter: bool
     condition_on_previous_text: bool
+    # File văn bản gợi ý từ vựng/cách viết cho Whisper (faster-whisper `hotwords`, áp cho mọi
+    # cửa sổ 30 giây). Trống = không gợi ý. Đường dẫn tương đối tính từ gốc dự án.
+    hotwords_file: Path | None = None
+    # Lọc câu Whisper bịa (xem transcription/normalize.drop_hallucinations) — chạy sau cache nên
+    # đổi các khóa này không phải nhận dạng lại
+    drop_hallucinations: bool = True
+    max_words_per_second: float = Field(default=10.0, gt=0)
+    no_speech_threshold: float = Field(default=0.6, ge=0, le=1)
+    hallucination_phrases: list[str] = Field(default_factory=list)
 
 
 class LLMSettings(_Section):
@@ -67,13 +76,15 @@ class OllamaSettings(_Section):
 
 class ClaudeSettings(_Section):
     model: str
+    # Mức nỗ lực suy nghĩ của Claude; chọn meme từng câu là việc phân loại nên "low" là đủ
+    effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
 
 
 class AnalyzerSettings(_Section):
     previous_segments: int = Field(ge=0, le=10)
     next_segments: int = Field(ge=0, le=10)
     timing_delay: float = Field(ge=0, le=2.0)
-    max_tokens: int = Field(ge=128, le=8192)
+    max_tokens: int = Field(ge=128, le=64000)
     # Tách đoạn Whisper dài (lời nói liền, không dấu câu) theo khoảng lặng giữa các từ
     split_long_segments: bool = True
     max_segment_seconds: float = Field(default=4.0, ge=1.0, le=30.0)
@@ -234,10 +245,12 @@ ENV_MAP: dict[str, tuple[str, str]] = {
     "WHISPER_BEAM_SIZE": ("whisper", "beam_size"),
     "WHISPER_VAD_FILTER": ("whisper", "vad_filter"),
     "WHISPER_CONDITION_ON_PREVIOUS_TEXT": ("whisper", "condition_on_previous_text"),
+    "WHISPER_HOTWORDS_FILE": ("whisper", "hotwords_file"),
     "LLM_BACKEND": ("llm", "backend"),
     "OLLAMA_HOST": ("ollama", "host"),
     "OLLAMA_MODEL": ("ollama", "model"),
     "CLAUDE_MODEL": ("claude", "model"),
+    "CLAUDE_EFFORT": ("claude", "effort"),
     "MEME_TIMING_DELAY": ("analyzer", "timing_delay"),
     "MEME_SEARCH_BASE_URL": ("meme_search", "base_url"),
     "MEME_SEARCH_TOKEN": ("meme_search", "token"),
@@ -300,6 +313,8 @@ def load_settings(profile: str | None = None, overrides: Mapping[str, Any] | Non
     settings.paths.assets_dir = resolve_path(settings.paths.assets_dir, root)
     settings.meme.library_file = resolve_path(settings.meme.library_file, root)
     settings.sfx.library_file = resolve_path(settings.sfx.library_file, root)
+    if settings.whisper.hotwords_file is not None:
+        settings.whisper.hotwords_file = resolve_path(settings.whisper.hotwords_file, root)
     return settings
 
 

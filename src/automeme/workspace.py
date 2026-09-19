@@ -75,7 +75,22 @@ def asr_key(cfg: WhisperSettings, length: int = 8) -> str:
         cfg.model, cfg.language, cfg.compute_type, str(cfg.beam_size),
         str(cfg.vad_filter), str(cfg.condition_on_previous_text),
     ])
+    goi_y = hotwords_text(cfg)
+    if goi_y:  # không gợi ý thì khóa giữ như cũ — cache đã có vẫn dùng được
+        phan += "|hotwords:" + goi_y
     return hashlib.sha256(phan.encode()).hexdigest()[:length]
+
+
+def hotwords_text(cfg: WhisperSettings) -> str:
+    """Nội dung file gợi ý từ vựng cho Whisper: bỏ dòng trống và dòng chú thích `#`, nối lại
+    bằng dấu cách. Không đặt file thì trả chuỗi rỗng; đặt mà không thấy file thì báo lỗi rõ."""
+    if cfg.hotwords_file is None:
+        return ""
+    path = Path(cfg.hotwords_file)
+    if not path.is_file():
+        raise FileNotFoundError(f"Không thấy file gợi ý từ vựng cho Whisper: {path}")
+    dong = [d.strip() for d in path.read_text(encoding="utf-8").splitlines()]
+    return " ".join(d for d in dong if d and not d.startswith("#"))
 
 
 def slug(text: str, max_len: int = 60) -> str:

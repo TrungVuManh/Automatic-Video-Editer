@@ -106,3 +106,58 @@ def test_tom_tat_co_so_lieu_va_vai_dong_dau():
     assert "[00:00.42] Hôm nay chúng ta sẽ hỏi." in text
     assert "còn 1 đoạn nữa" in text
     assert "data" in text and "v.json" in text
+
+
+# ------------------------------------------------------------------ lọc câu Whisper bịa
+def _loc(segments, words=(), **kw):
+    from automeme.transcription.normalize import drop_hallucinations
+
+    cfg = {"phrases": ["cảm ơn các bạn đã theo dõi", "đăng ký kênh"],
+           "max_words_per_second": 10, "no_speech_threshold": 0.6, **kw}
+    return drop_hallucinations({"segments": segments, "words": list(words)}, **cfg)
+
+
+def test_bo_cau_bia_noi_nhanh_vo_ly():
+    """Lỗi thật trên livestream: 10 từ trong 0,04 giây ở cuối đoạn im lặng."""
+    that = {"id": 0, "start": 84.32, "end": 89.88, "text": "hai nền tảng thì nó giúp nó dễ"}
+    bia = {"id": 1, "start": 89.88, "end": 89.92,
+           "text": "Cảm ơn các bạn đã theo dõi và hẹn gặp lại."}
+    words = [{"w": "dễ", "start": 89.74, "end": 89.87}, {"w": "và", "start": 89.88, "end": 89.92}]
+    moi, bo = _loc([that, bia], words)
+    assert [s["text"] for s in moi["segments"]] == [that["text"]]
+    assert bo == [bia] and [w["w"] for w in moi["words"]] == ["dễ"]
+
+
+def test_cau_quen_thuoc_noi_binh_thuong_thi_giu():
+    """Streamer có thể nói thật lời chào cuối — chỉ bỏ khi có thêm dấu hiệu bịa."""
+    chao = {"id": 0, "start": 10, "end": 13, "text": "cảm ơn các bạn đã theo dõi nhé"}
+    moi, bo = _loc([chao])
+    assert bo == [] and moi["segments"] == [chao]
+    im_lang = {**chao, "no_speech_prob": 0.9}
+    assert _loc([im_lang])[1] == [im_lang]  # Whisper tự báo nhiều khả năng không có tiếng nói
+
+
+def test_cau_ngan_hop_le_khong_bi_bo_va_danh_lai_id():
+    ngan = {"id": 0, "start": 1.0, "end": 1.1, "text": "ừ"}  # 1 từ, dưới ngưỡng 4 từ
+    sau = {"id": 1, "start": 2.0, "end": 2.05, "text": "Đăng ký kênh ủng hộ mình nha các bạn"}
+    tiep = {"id": 2, "start": 3.0, "end": 4.0, "text": "đi thôi"}
+    moi, bo = _loc([ngan, sau, tiep])
+    assert [s["id"] for s in moi["segments"]] == [0, 1] and bo == [sau]
+    assert _loc([ngan])[0]["segments"] == [ngan]
+
+
+def test_chuan_hoa_giu_xac_suat_khong_co_tieng_noi():
+    raw = {"segments": [{"start": 0, "end": 1, "text": "a", "no_speech_prob": 0.12345,
+                         "avg_logprob": -0.5}, {"start": 1, "end": 2, "text": "b"}]}
+    doan = normalize_transcript(raw, video_name="v.mp4", model="m")["segments"]
+    assert doan[0]["no_speech_prob"] == 0.123 and "no_speech_prob" not in doan[1]
+
+
+def test_bo_cau_quen_thuoc_lap_lai_nhieu_lan():
+    """Thí nghiệm gợi ý từ vựng: Whisper bịa cùng một câu cho cả 90 giây."""
+    bia = "Hãy subscribe cho kênh lalaschool Để không bỏ lỡ những video hấp dẫn"
+    segs = [{"id": i, "start": t, "end": t + 30, "text": bia} for i, t in enumerate((0, 48, 77))]
+    moi, bo = _loc(segs, phrases=["lalaschool"])
+    assert moi["segments"] == [] and len(bo) == 3
+    mot_lan = [{**segs[0], "text": "hãy subscribe cho kênh lalaschool nhé"}]
+    assert _loc(mot_lan, phrases=["lalaschool"])[1] == []  # một lần, tốc độ bình thường → giữ
